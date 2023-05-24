@@ -21,6 +21,6 @@ def DoubleReLUApply(self, inputs): #Unsure if I should prevent the parameter fro
 def DoubleReLUExtract(self):
 	val = str(self.pwlParams[0].numpy())
 	print("1. y = x + " + val + " { x < -" + val +" }",
-       	  "2. 0 {-" + val + " <= x <= " + val +"}"
+       	  "2. 0 {-" + val + " <= x <= " + val +"}",
 		  "3. y = x - " + val + " { " + val + " < x}", sep="\n")
 	return

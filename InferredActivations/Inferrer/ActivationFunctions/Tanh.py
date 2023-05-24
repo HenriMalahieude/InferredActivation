@@ -13,7 +13,7 @@ def TanhInit(self, pwlInit):
 		b3 = pseudoInRange(b2, 0)
 		b4 = pseudoInRange(b3, 1)
 		b5 = pseudoInRange(b4, 4)
-		print("Randomly Set Boundaries to:", b1, b2, b3, b4, b5, sep=" ")
+		#print("Randomly Set Boundaries to:", b1, b2, b3, b4, b5, sep=" ")
 		self.set_weights([np.array([b1, b2, b3, b4, b5, random(),random()-1,random(),random(),random(),random(),random(),random()])])
 	return
 

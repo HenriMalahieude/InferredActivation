@@ -24,9 +24,9 @@ def PiLUApply(self, inputs):
 	return b1*l1 + b2*l2
 
 def PiLUExtract(self):
-	gamma = str(self.pwlParams[2])
-	beta = str(self.pwlParams[1])
-	alpha = str(self.pwlParams[0])
+	gamma = str(self.pwlParams[2].numpy())
+	beta = str(self.pwlParams[1].numpy())
+	alpha = str(self.pwlParams[0].numpy())
 	print("1. " + alpha + "x + " + gamma + "( 1 - " + alpha + ") { " + gamma + " < x }",
           "2. " + beta  + "x + " + gamma + "( 1 - " + beta  + ") { x <= " + gamma + "}",
 		  sep="\n")

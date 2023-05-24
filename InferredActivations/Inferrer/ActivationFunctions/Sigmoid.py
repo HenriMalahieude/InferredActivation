@@ -46,3 +46,23 @@ def SigExtract(self):
        	  "5. y = " + str(self.pwlParams[14].numpy()) + "x + " + str(self.pwlParams[15].numpy()) + " { " + str(self.pwlParams[3].numpy()) + " < x <= " + str(self.pwlParams[4].numpy()) + " }",
 		  "6. y = " + str(self.pwlParams[16].numpy()) + "x { x > " + str(self.pwlParams[4].numpy()) +" }", sep="\n")
 	return
+
+def SigBoundaryApply(self, inputs):
+	#Start the Piece-Wise Linear thingy (let us commence forth)
+	#Calculate Boundaries... With this much math, it makes me wonder if this will really increase efficiency (compared to a single calc for all of the tensor by sigmoid)
+	b1 = tf.cast(tf.math.less_equal(inputs, self.pwlParams[0]), inputs.dtype)
+	b2 = tf.cast(tf.math.logical_and(tf.math.greater(inputs, self.pwlParams[0]), tf.math.less_equal(inputs, self.pwlParams[1])), inputs.dtype)
+	b3 = tf.cast(tf.math.logical_and(tf.math.greater(inputs, self.pwlParams[1]), tf.math.less_equal(inputs, self.pwlParams[2])), inputs.dtype)
+	b4 = tf.cast(tf.math.logical_and(tf.math.greater(inputs, self.pwlParams[2]), tf.math.less_equal(inputs, self.pwlParams[3])), inputs.dtype)
+	b5 = tf.cast(tf.math.logical_and(tf.math.greater(inputs, self.pwlParams[3]), tf.math.less_equal(inputs, self.pwlParams[4])), inputs.dtype)
+	b6 = tf.cast(tf.math.greater(inputs, self.pwlParams[4]), inputs.dtype)
+
+	#Calculate Each Linear Piece
+	l1 = tf.math.multiply(b1, 0)
+	l2 = tf.math.multiply(b2, tf.math.add(tf.math.multiply(inputs, 0.011), 0.071))
+	l3 = tf.math.multiply(b3, tf.math.add(tf.math.divide_no_nan(tf.math.multiply(inputs, 0.75), tf.math.subtract(inputs, 2)), 0.5))
+	l4 = tf.math.multiply(b4, tf.math.add(tf.math.divide_no_nan(tf.math.multiply(inputs, 0.75), tf.math.add(inputs, 2)), 0.5))
+	l5 = tf.math.multiply(b5, tf.math.add(tf.math.multiply(inputs, 0.011), 0.929))
+	l6 = tf.math.multiply(b6, 1)
+
+	return l1 + l2 + l3 + l4 + l5 + l6
