@@ -1,7 +1,8 @@
 import logging
 import InferredActivations.Inferrer as IL
-import Global as G
-from keras import models, layers, losses
+import InferredActivations.Inferrer.ActivationFunctions as IA
+import LeNet_Experiment.Global as G
+from keras import models, layers
 
 logging.basicConfig(filename='infersigmoid.log', format='%(message)s', encoding='utf-8',level=logging.DEBUG)
 
@@ -9,12 +10,12 @@ ISModel = models.Sequential()
 ISModel.add(layers.Conv2D(6, 5, input_shape=G.x_train.shape[1:]))
 ISModel.add(layers.Activation('tanh'))
 ISModel.add(layers.AveragePooling2D(2))
-ISModel.add(IL.InferredActivation())
+ISModel.add(IL.InferredActivation(eq_funcs=IA.SigBoundaryOnlyApproximator)) #Testing Boundary training only
 
 ISModel.add(layers.Conv2D(16, 5))
 ISModel.add(layers.Activation('tanh'))
 ISModel.add(layers.AveragePooling2D(2))
-ISModel.add(IL.InferredActivation())
+ISModel.add(IL.InferredActivation(eq_funcs=IA.SigBoundaryOnlyApproximator))
 
 ISModel.add(layers.Conv2D(120, 5))
 ISModel.add(layers.Activation('tanh'))
@@ -47,4 +48,4 @@ logging.info('Normal Time: ' + str(IS_time) + "; Normal Final Accuracy: " + str(
 ISModel.layers[3].Extract()
 print("\n")
 ISModel.layers[7].Extract()
-"""
+#"""
