@@ -10,12 +10,12 @@ ISModel = models.Sequential()
 ISModel.add(layers.Conv2D(6, 5, input_shape=G.x_train.shape[1:]))
 ISModel.add(layers.Activation('tanh'))
 ISModel.add(layers.AveragePooling2D(2))
-ISModel.add(IL.InferredActivation(eq_funcs=IA.SigBoundaryOnlyApproximator)) #Testing Boundary training only
+ISModel.add(IL.InferredActivation(eq_funcs=IA.NewSigApproximator)) #Testing Boundary training only
 
 ISModel.add(layers.Conv2D(16, 5))
 ISModel.add(layers.Activation('tanh'))
 ISModel.add(layers.AveragePooling2D(2))
-ISModel.add(IL.InferredActivation(eq_funcs=IA.SigBoundaryOnlyApproximator))
+ISModel.add(layers.Activation('sigmoid'))#IL.InferredActivation(eq_funcs=IA.SigApproximator))
 
 ISModel.add(layers.Conv2D(120, 5))
 ISModel.add(layers.Activation('tanh'))
@@ -44,8 +44,8 @@ logging.info('Normal Time: ' + str(IS_time) + "; Normal Final Accuracy: " + str(
 #ISQ_time, ISQ_history = G.trainAndTime(ISQModel)
 #logging.info('Quantized Time: ' + str(ISQ_time) + "; Quantized Final Accuracy: " + str(ISQ_history.history['val_accuracy'][4]))
 
-"""
+#"""
 ISModel.layers[3].Extract()
 print("\n")
-ISModel.layers[7].Extract()
+#ISModel.layers[7].Extract()
 #"""

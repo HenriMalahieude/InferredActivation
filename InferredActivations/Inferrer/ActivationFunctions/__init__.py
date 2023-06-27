@@ -3,6 +3,7 @@ from .Tanh import TanhApply, TanhExtract, TanhInit
 from .Gelu import GeluApply, GeluExtract, GeluInit
 from .DoubleReLU import DoubleReLUApply, DoubleReLUExtract, DoubleReLUInit
 from .PiLu import PiLUApply, PiLUExtract, PiLUInit
+from .NewSigmoid import *
 
 #Let's try a wrapper.... 
 #It ended up not being a wrapper really...
@@ -32,3 +33,6 @@ def DoubleReLUApproximator(self, mode, *args, **kwargs):
 
 def PiLuApproximator(self, mode, *args, **kwargs):
 	return ApproximatorMode(self, mode, PiLUInit, PiLUApply, PiLUExtract, *args, **kwargs)
+
+def NewSigApproximator(self, mode, *args, **kwargs):
+	return ApproximatorMode(self, mode, NSInit, NSApply, NSExtract, *args, **kwargs)
