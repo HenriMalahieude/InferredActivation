@@ -1,29 +1,59 @@
 import tensorflow as tf
 import numpy as np
-from keras import layers
+from keras import layers#, initializers
 
+"""class StepperInitializer(initializers.Initializer):
+	def __init__(self, bot, top, count):
+		self.bot = bot
+		self.step_size = (top - bot) / count
+		self.iter = 0
+
+	def __call__(self, shape, dtype=None, **kwargs):"""
+
+#Referenced: https://github.com/MrGoriay/pwlu-pytorch/blob/main/PWLA.py
 class PiecewiseLinearUnitV1(layers.Layer):
-	def __init__(self, max_params=20, interval_start=3):
+	def __init__(self, max_params=20, interval_start=5, momentum=0.9):
 		super(PiecewiseLinearUnitV1, self).__init__()
-		self.max_n = max(max_params, 10) #We want to ensure at least a minium of parameters
-		self.N_start = max(min(int(interval_start), 20), 2)
+		self.max_n = max(max_params, 10)
+		self.N_start = max(min(int(interval_start), 20), 3)
+		
+		self.running_avg = 0
+		self.running_std = 1
+		self.momentum = momentum
+
+		self.collect_stats = False
 
 	def build(self, input_shape):
-		#TODO: Statistical Analysis of input to then give a best initial status
 		self.N = self.add_weight(shape=(), initializer='one', trainable=True)
 		self.Bounds = self.add_weight(shape=(2,), initializer='one', trainable=True)
 		self.BoundSlope = self.add_weight(shape=(2,), initializer='one', trainable=True)
 		self.nheight = self.add_weight(shape=(self.max_n+1,), initializer='one', trainable=True)
-		self.set_weights([self.N_start, np.array([-1, 1]), np.array([0, 0]), np.random.random_sample(size=(self.max_n+1,))])
+
+		#Start as a ReLU, though there can be more options tried
+		self.set_weights([self.N_start, np.array([-3, 3]), np.array([0, 1]), np.linspace(start=0, stop=6, num=self.max_n+1)]) #np.random.random_sample(size=(self.max_n+1,))
 	
 	def call(self, inputs):
 
+		if self.collect_stats:
+			avg = tf.math.reduce_mean(inputs)
+			std = tf.math.reduce_std(inputs) #Requires eager execution
+
+			self.running_avg = (self.running_avg * self.momentum) + (1 - self.momentum) * avg.numpy()
+			self.running_std = (self.running_std * self.momentum) + (1 - self.momentum) * std.numpy()
+
+			#Default to ReLU while stats are collected
+			b1 = tf.cast(tf.math.greater(inputs, 0.0), dtype=inputs.dtype)
+
+			return b1 * inputs
+
 		@tf.custom_gradient #Let's test this custom gradient thing
 		def intervalFunc(cur):
-			def grad(x):
-				return x*cur 
+			y = tf.math.floor(tf.math.maximum(tf.math.minimum(cur, self.max_n), 3))
+
+			def grad(up):
+				return up * cur * self.max_n #We want the current count to impact the gradient, and the maximum count to also force movement
 			
-			return tf.math.floor(tf.math.maximum(tf.math.minimum(cur, self.max_n), 2)), grad
+			return y, grad
 
 		intervals = intervalFunc(self.N)
 		Br, Bl = self.Bounds[1], self.Bounds[0]
@@ -31,26 +61,25 @@ class PiecewiseLinearUnitV1(layers.Layer):
 
 		interval_length = (Br - Bl) / intervals
 		
-		#TODO: There is one thing left, that is making self.nheights[self.N+2] = self.nheights[self.N+1] if self.N != self.max_n
+		#Proposal: There is one thing left, that is making self.nheights[self.N+2] = self.nheights[self.N+1] if self.N != self.max_n
 		#		-> the reason for this is that when it reaches the next "interval" size, the right bound height suddenly becomes completely random making it think it 
 		# 			shouldn't grow the parameters if it's not a good height by chance
 
 		#This is the index tensor which will be indexing the self.nheight params...
-		idx_tensor = tf.math.floor(tf.math.divide_no_nan(inputs - Bl, interval_length))
+		idx_tensor = tf.math.floor(tf.math.divide(inputs - Bl, interval_length))
 		Bidx_tensor = idx_tensor * interval_length + Bl
 
 		#Oh my fucking god I wasn't ready for the bs from tensorflow
 		#NOTE: tf.gather_nd(indices=[[[0], [1]], [[2], [3]]], params=['a', 'b', 'c', 'd']) --> [['a', 'b'], ['c', 'd']]
 		#So basically, we have a way to recontruct our.... tensors....?
-		idx_tensor = tf.expand_dims(idx_tensor, axis=len(idx_tensor.shape.as_list()))
-		idx_tensor = tf.cast(idx_tensor, dtype=tf.int32)
+		idx_tensor = tf.cast(tf.expand_dims(idx_tensor, axis=len(idx_tensor.shape.as_list())), dtype=tf.int32)
 
 		#And here we do the indexing of the params into a new tensor, which is now the nheights at each location...
 		Yidx1_tensor = tf.gather_nd(params=self.nheight, indices=tf.math.add(idx_tensor, 1))
 		Yidx0_tensor = tf.gather_nd(params=self.nheight, indices=idx_tensor)
 
-		#And then we finally get what we need. . .
-		Kidx_tensor = tf.math.divide_no_nan(tf.subtract(Yidx1_tensor, Yidx0_tensor), interval_length)
+		#And then we finally get what we need. . . (the heights)
+		Kidx_tensor = tf.math.divide(tf.subtract(Yidx1_tensor, Yidx0_tensor), interval_length)
 
 		#And now we can FINALLY get to the piece_wise_linear
 		b1 = tf.cast(tf.math.less(inputs, Bl), dtype=inputs.dtype)
@@ -75,3 +104,18 @@ class PiecewiseLinearUnitV1(layers.Layer):
 			m = m + str(self.nheight[i].numpy()) + ", "
 		
 		print(m)
+
+	def StatisticalAnalysisToggle(self, forceTo=None):
+		before = self.collect_stats
+		if forceTo != None and type(forceTo) is bool:
+			self.collect_stats = forceTo
+			return
+		else:
+			self.collect_stats = not self.collect_stats
+
+		if before and not self.collect_stats: #Meaning we've ended our stats collection phase
+			Bl_stat = self.running_avg - 3 * self.running_std
+			Br_stat = self.running_avg + 3 * self.running_std
+			self.set_weights([self.N_start, np.array([Bl_stat , Br_stat]), np.array([0, 1]), np.linspace(start=Bl_stat, stop=Br_stat, num=self.max_n+1)])
+			print("\nRunning Mean: " + str(self.running_avg))
+			print("Running Deviation: " + str(self.running_std))

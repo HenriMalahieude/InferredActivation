@@ -23,7 +23,20 @@ ITModel.add(IL.PiecewiseLinearUnitV1())
 ITModel.add(layers.Dense(10, activation='softmax'))
 #ITModel.summary(line_length=150)
 
-IT_time, IT_history = G.trainAndTime(ITModel)
+#First, collect stats
+"""ITModel.layers[1].StatisticalAnalysisToggle(forceTo=True)
+ITModel.layers[5].StatisticalAnalysisToggle(forceTo=True)
+ITModel.layers[9].StatisticalAnalysisToggle(forceTo=True)
+ITModel.layers[12].StatisticalAnalysisToggle(forceTo=True)
+
+G.trainAndTime(ITModel, ee=2, eager=True)
+
+ITModel.layers[1].StatisticalAnalysisToggle()
+ITModel.layers[5].StatisticalAnalysisToggle()
+ITModel.layers[9].StatisticalAnalysisToggle()
+ITModel.layers[12].StatisticalAnalysisToggle()"""
+
+IT_time, IT_history = G.trainAndTime(ITModel, ee=5)
 logging.basicConfig(filename='infertanh.log', encoding='utf-8',level=logging.DEBUG)
 logging.info('Time: ' + str(IT_time))
 logging.info('Final Epoch Accuracy: ' + str(IT_history.history['val_accuracy'][4]))
