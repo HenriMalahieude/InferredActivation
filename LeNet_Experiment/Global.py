@@ -39,10 +39,10 @@ def quantizeAfterTraining(mod, weights_only=False):
     return new_model
 
 #Returns TrainTime, History
-def trainAndTime(mod):
+def trainAndTime(mod, ee=5, eager=False):
     start_t = time.time()
-    mod.compile(optimizer='adam', loss=losses.sparse_categorical_crossentropy, metrics=['accuracy'])
-    hist = mod.fit(x_train, y_train, batch_size=64, epochs=5, validation_data=(x_val, y_val))
+    mod.compile(optimizer='adam', loss=losses.sparse_categorical_crossentropy, metrics=['accuracy'], run_eagerly=eager)
+    hist = mod.fit(x_train, y_train, batch_size=64, epochs=ee, validation_data=(x_val, y_val))
     return time.time() - start_t, hist
 
 def printGradients(mod, *nums):
