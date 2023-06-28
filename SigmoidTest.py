@@ -10,7 +10,7 @@ ISModel = models.Sequential()
 ISModel.add(layers.Conv2D(6, 5, input_shape=G.x_train.shape[1:]))
 ISModel.add(layers.Activation('tanh'))
 ISModel.add(layers.AveragePooling2D(2))
-ISModel.add(IL.InferredActivation(eq_funcs=IA.NewSigApproximator)) #Testing Boundary training only
+ISModel.add(IL.InferredActivation(eq_funcs=IA.NewNewSigApproximator)) 
 
 ISModel.add(layers.Conv2D(16, 5))
 ISModel.add(layers.Activation('tanh'))

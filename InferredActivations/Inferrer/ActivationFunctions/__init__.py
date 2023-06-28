@@ -1,19 +1,20 @@
-from .Sigmoid import SigApply, SigExtract, SigInit, SigBoundaryApply
-from .Tanh import TanhApply, TanhExtract, TanhInit
-from .Gelu import GeluApply, GeluExtract, GeluInit
-from .DoubleReLU import DoubleReLUApply, DoubleReLUExtract, DoubleReLUInit
-from .PiLu import PiLUApply, PiLUExtract, PiLUInit
+from .Sigmoid import *
+from .Tanh import *
+from .Gelu import *
+from .DoubleReLU import *
+from .PiLu import *
 from .NewSigmoid import *
+from .NewNewSigmoid import *
 
 #Let's try a wrapper.... 
 #It ended up not being a wrapper really...
-def ApproximatorMode(self, mode, func1, func2, func3, *args, **kwargs):
+def ApproximatorMode(self, mode, init, apply, extract, *args, **kwargs):
 	if mode == 'init':
-		return func1(self, *args, **kwargs)
+		return init(self, *args, **kwargs)
 	elif mode == 'apply':
-		return func2(self, *args, **kwargs)
+		return apply(self, *args, **kwargs)
 	else:
-		return func3(self, *args, **kwargs)
+		return extract(self, *args, **kwargs)
 	
 def SigApproximator(self, mode, *args, **kwargs):
 	return ApproximatorMode(self, mode, SigInit, SigApply, SigExtract, *args, **kwargs)
@@ -34,5 +35,8 @@ def DoubleReLUApproximator(self, mode, *args, **kwargs):
 def PiLuApproximator(self, mode, *args, **kwargs):
 	return ApproximatorMode(self, mode, PiLUInit, PiLUApply, PiLUExtract, *args, **kwargs)
 
-def NewSigApproximator(self, mode, *args, **kwargs):
-	return ApproximatorMode(self, mode, NSInit, NSApply, NSExtract, *args, **kwargs)
+#def NewSigApproximator(self, mode, *args, **kwargs):
+	#return ApproximatorMode(self, mode, NSInit, NSApply, NSExtract, *args, **kwargs)
+
+def NewNewSigApproximator(self, mode, *args, **kwargs):
+	return ApproximatorMode(self, mode, NNSigInit, NNSigApply, NNSigExtract, *args, **kwargs)
