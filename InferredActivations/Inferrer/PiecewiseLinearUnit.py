@@ -36,7 +36,7 @@ class PiecewiseLinearUnitV1(layers.Layer):
 
 		if self.collect_stats:
 			avg = tf.math.reduce_mean(inputs)
-			std = tf.math.reduce_std(inputs) #Requires eager execution
+			std = tf.math.reduce_std(inputs) #TODO: Rewrite this to avoid "eager execution"
 
 			self.running_avg = (self.running_avg * self.momentum) + (1 - self.momentum) * avg.numpy()
 			self.running_std = (self.running_std * self.momentum) + (1 - self.momentum) * std.numpy()
