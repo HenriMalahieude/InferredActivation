@@ -2,8 +2,6 @@
 import tensorflow as tf
 import numpy as np
 
-#Important Note: The Sigmoid with Boundary training seems to have a habit of overfitting, we may want to highly attenuate the gradients then
-
 def NNSigInit(self, pwlInit):
     self.bounds = self.add_weight(shape=(5,), initializer=pwlInit, trainable=True)
     self.pwlParams = self.add_weight(shape=(14,), initializer=pwlInit, trainable=True)
@@ -22,21 +20,33 @@ def NNSigExtract(self):
 		  "6. y = " + str(self.pwlParams[12].numpy()) + "x + " + str(self.pwlParams[13].numpy()) + " { " + str(self.bounds[4].numpy()) + " < x }", 
           sep="\n")
 
+#Important Note: The Sigmoid with Boundary training seems to have a habit of overfitting
+
+"""
+Paths Tread:
+    * Multiplying the bound to the entire gradient (dy_dx), don't do that it ruins gradients in the upstream
+    * Making the entire dparams the same gradient, current iteration, /shrug?
+    * Funny enough, offsetting the gradients (dparams specifically) by 1 backwards seems to make it stable for some goddamn reason
+    * Using reduce_sum seems to be a finnicky one, but makes it perform worse overall
+"""
+
 #This one will be big, so move to bottom
 def NNSigApply(self, inputs):
-    ATTENUATION = [1, 1] #Attempt at fixing overfitting, but seems that it wasn't needed (also doesn't do much)
-
     #b1 = tf.cast(tf.math.less_equal(inputs, self.bounds[0]), inputs.dtype)
     #l1 = tf.math.multiply(b1, self.pwlParams[0])
     @tf.custom_gradient
     def E1(x): #Bottom Bound
-        bound = tf.cast(tf.math.less_equal(inputs, self.bounds[0]), inputs.dtype)
+        bound = tf.cast(tf.math.less_equal(x, self.bounds[0]), x.dtype)
         y = bound * (x * self.pwlParams[0] + self.pwlParams[1])
         def grad_fn(dx, variables): #Note variables argument is keyword required
-            dy_dx = bound * dx * self.pwlParams[0]
-            dscalar = tf.reshape(tf.reduce_mean(dy_dx), [1])
-            dbounds = tf.pad(dscalar / ATTENUATION[0], [[0, 4]])
-            dparams = tf.pad(dscalar / ATTENUATION[1], [[0, variables[1].shape.as_list()[0]-1]])
+            dy_dx = dx * self.pwlParams[0] + bound * self.pwlParams[1]
+
+            dscalar = tf.reduce_mean(dy_dx)
+            dscalar1 = tf.reshape(dscalar, [1])
+            dscalar2 = tf.constant([1, 1], dtype=dx.dtype) * dscalar #tf.slice(variables[1], [0], [2]) * dscalar #
+
+            dbounds = tf.pad(dscalar1, [[0, 4]])
+            dparams = tf.pad(dscalar2, [[0, variables[1].shape.as_list()[0]-2]])
             #print("E1:", dy_dx, grad_vars[0], grad_vars[1], sep="\n\t")
             return dy_dx, [dbounds, dparams]
         return y, grad_fn
@@ -48,10 +58,14 @@ def NNSigApply(self, inputs):
         bound = tf.cast(tf.math.logical_and(tf.math.greater(x, self.bounds[0]), tf.math.less_equal(x, self.bounds[1])), x.dtype)
         y = tf.math.multiply(bound, tf.math.add(tf.math.multiply(x, self.pwlParams[2]), self.pwlParams[3]))
         def grad_fn(dx, variables):
-            dy_dx = dx * self.pwlParams[2]
-            dscalar = tf.constant([1, 1], dtype=x.dtype) * (tf.reduce_mean(dy_dx)) #Duplicating the value
-            dbounds = tf.pad(dscalar / ATTENUATION[0], [[0, 3]])
-            dparams = tf.pad(dscalar / ATTENUATION[1], [[1, variables[1].shape.as_list()[0]-3]])
+            dy_dx = dx * self.pwlParams[2] + bound * self.pwlParams[3]
+
+            dscalar = tf.reduce_mean(dy_dx)
+            dscalar1 = tf.constant([1, 1], dtype=dx.dtype) * dscalar #Duplicating the value
+            dscalar2 = tf.constant([1, 1], dtype=dx.dtype) * dscalar#tf.slice(variables[1], [2], [2]) * dscalar
+
+            dbounds = tf.pad(dscalar1, [[0, 3]])
+            dparams = tf.pad(dscalar2, [[2, variables[1].shape.as_list()[0]-4]])
             #print("E2:", dy_dx, dbounds, dparams, sep="\n\t")
             return dy_dx, [dbounds, dparams]
         return y, grad_fn
@@ -63,12 +77,14 @@ def NNSigApply(self, inputs):
         bound = tf.cast(tf.math.logical_and(tf.math.greater(x, self.bounds[1]), tf.math.less_equal(x, self.bounds[2])), x.dtype)
         y = tf.math.multiply(bound, tf.math.add(tf.math.divide_no_nan(tf.math.multiply(x, self.pwlParams[4]), tf.math.subtract(x, self.pwlParams[5])), self.pwlParams[6]))
         def grad_fn(dx, variables):
-            dy_dx = tf.math.divide_no_nan((self.pwlParams[4]*2), tf.pow((dx - self.pwlParams[5]), 2)) #manually calculated derivative
+            dy_dx = tf.math.divide_no_nan((self.pwlParams[4]*2), tf.pow((dx - self.pwlParams[5]), 2)) + bound * self.pwlParams[6] #manually calculated derivative
+
             dscalar = tf.reshape(tf.reduce_mean(dy_dx), [1])
-            dscalar1 = tf.constant([1, 1], dtype=x.dtype) * dscalar #Duplicating the value
-            dscalar2 = tf.constant([1, 1, 1], dtype=x.dtype) * dscalar
-            dbounds = tf.pad(dscalar1 / ATTENUATION[0], [[1, 2]])
-            dparams = tf.pad(dscalar2 / ATTENUATION[1], [[3, variables[1].shape.as_list()[0]-6]])
+            dscalar1 = tf.constant([1, 1], dtype=dx.dtype) * dscalar
+            dscalar2 = tf.constant([1, 1, 1], dtype=dx.dtype) * dscalar #tf.slice(variables[1], [4], [3]) * dscalar #
+
+            dbounds = tf.pad(dscalar1, [[1, 2]])
+            dparams = tf.pad(dscalar2, [[4, variables[1].shape.as_list()[0]-7]])
             #print("E3:", dy_dx, dbounds, dparams, sep="\n\t")
             return dy_dx, [dbounds, dparams]
         return y, grad_fn
@@ -80,12 +96,14 @@ def NNSigApply(self, inputs):
         bound = tf.cast(tf.math.logical_and(tf.math.greater(x, self.bounds[2]), tf.math.less_equal(x, self.bounds[3])), x.dtype)
         y = tf.math.multiply(bound, tf.math.add(tf.math.divide_no_nan(tf.math.multiply(x, self.pwlParams[7]), tf.math.add(x, self.pwlParams[8])), self.pwlParams[9]))
         def grad_fn(dx, variables):
-            dy_dx = tf.math.divide_no_nan((self.pwlParams[7]*2), tf.pow((dx - self.pwlParams[8]), 2)) #manually calculated derivative
+            dy_dx = tf.math.divide_no_nan((self.pwlParams[7]*2), tf.pow((dx - self.pwlParams[8]), 2)) + bound * self.pwlParams[9] #manually calculated derivative
+
             dscalar = tf.reshape(tf.reduce_mean(dy_dx), [1])
-            dscalar1 = tf.constant([1, 1], dtype=x.dtype) * dscalar #Duplicating the value
-            dscalar2 = tf.constant([1, 1, 1], dtype=x.dtype) * dscalar
-            dbounds = tf.pad(dscalar1 / ATTENUATION[0], [[2, 1]])
-            dparams = tf.pad(dscalar2 / ATTENUATION[1], [[6, variables[1].shape.as_list()[0]-9]])
+            dscalar1 = tf.constant([1, 1], dtype=dx.dtype) * dscalar
+            dscalar2 = tf.constant([1, 1, 1], dtype=dx.dtype) * dscalar #tf.slice(variables[1], [7], [3]) * dscalar
+
+            dbounds = tf.pad(dscalar1, [[2, 1]])
+            dparams = tf.pad(dscalar2, [[7, variables[1].shape.as_list()[0]-10]])
             #print("E4:", dy_dx, dbounds, dparams, sep="\n\t")
             return dy_dx, [dbounds, dparams]
         return y, grad_fn
@@ -97,10 +115,14 @@ def NNSigApply(self, inputs):
         bound = tf.cast(tf.math.logical_and(tf.math.greater(x, self.bounds[3]), tf.math.less_equal(x, self.bounds[4])), x.dtype)
         y = tf.math.multiply(bound, tf.math.add(tf.math.multiply(x, self.pwlParams[10]), self.pwlParams[11]))
         def grad_fn(dx, variables):
-            dy_dx = dx * self.pwlParams[10]
-            dscalar = tf.constant([1, 1], dtype=x.dtype) * (tf.reduce_mean(dy_dx)) #Duplicating the value
-            dbounds = tf.pad(dscalar / ATTENUATION[0], [[3, 0]])
-            dparams = tf.pad(dscalar / ATTENUATION[1], [[9, variables[1].shape.as_list()[0]-11]])
+            dy_dx = dx * self.pwlParams[10] + bound * self.pwlParams[11]
+
+            dscalar = tf.reduce_mean(dy_dx)
+            dscalar1 = tf.constant([1, 1],dtype=dx.dtype) * dscalar
+            dscalar2 = dscalar1 #tf.slice(variables[1], [10], [2]) * dscala
+
+            dbounds = tf.pad(dscalar1, [[3, 0]])
+            dparams = tf.pad(dscalar2, [[10, variables[1].shape.as_list()[0]-12]])
             #print("E5:", dy_dx, dbounds, dparams, sep="\n\t")
             return dy_dx, [dbounds, dparams]
         return y, grad_fn
@@ -112,10 +134,14 @@ def NNSigApply(self, inputs):
         bound = tf.cast(tf.math.less_equal(x, self.bounds[4]), x.dtype)
         y = bound * (x * self.pwlParams[12] + self.pwlParams[13])
         def grad_fn(dx, variables):
-            dy_dx = bound * dx * self.pwlParams[12]
-            dscalar = tf.reshape(tf.reduce_mean(dy_dx), [1])
-            dbounds = tf.pad(dscalar / ATTENUATION[0], [[4, 0]])
-            dparams = tf.pad(dscalar / ATTENUATION[1], [[variables[1].shape.as_list()[0]-1, 0]])
+            dy_dx = dx * self.pwlParams[12] + bound * self.pwlParams[13]
+
+            dscalar = tf.reduce_mean(dy_dx)
+            dscalar1 = tf.reshape(dscalar, [1])
+            dscalar2 = tf.constant([1, 1],dtype=dx.dtype) * dscalar#tf.slice(variables[1], [12], [2]) * dscala
+
+            dbounds = tf.pad(dscalar1, [[4, 0]])
+            dparams = tf.pad(dscalar2, [[variables[1].shape.as_list()[0]-2, 0]])
             #print("E6:", dy_dx, grad_vars[0], grad_vars[1], sep="\n\t")
             return dy_dx, [dbounds, dparams]
         return y, grad_fn
