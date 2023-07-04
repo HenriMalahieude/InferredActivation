@@ -1,7 +1,7 @@
 import logging
 import InferredActivations.Inferrer as IL
 import InferredActivations.Inferrer.ActivationFunctions as IA
-import Global as G
+import LeNet_Experiment.Global as G
 from keras import models, layers
 
 ITModel = models.Sequential()
@@ -29,7 +29,7 @@ logging.basicConfig(filename='infertanh.log', encoding='utf-8',level=logging.DEB
 logging.info('Time: ' + str(IT_time))
 logging.info('Final Epoch Accuracy: ' + str(IT_history.history['val_accuracy'][4]))
 
-"""
+
 ITModel.layers[1].Extract()
 print("\n")
 ITModel.layers[5].Extract()
