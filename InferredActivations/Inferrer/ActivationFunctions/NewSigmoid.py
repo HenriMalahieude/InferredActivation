@@ -2,6 +2,8 @@ import numpy as np
 import tensorflow as tf
 from .utils import pseudoInRange, random
 
+#NOTE: It seems that there needs to be more than just the bounds for calculating gradients
+
 @tf.custom_gradient
 def CatchGradientFor(bound):
 	def Grad(upstream):
@@ -40,8 +42,6 @@ def UpperWrapper(x, bound):
 #Fuck it we ball
 
 #----------Sigmoid
-#NOTE: Currently the Sigmoid Approximater uses the PWL that has (2-x) in the denom (hence the divide_no_nan), I feel like this could be more effective with something else
-#I'm sure someone with more python experience could make this better
 def NSInit(self, pwlInit):
 	self.bounds = self.add_weight(shape=(5,), initializer=pwlInit, trainable=True)
 	self.pwlParams = self.add_weight(shape=(12,), initializer=pwlInit, trainable=True)
@@ -57,8 +57,6 @@ def NSInit(self, pwlInit):
 		self.set_weights([np.array([b1, b2, b3, b4, b5]), np.array([random() - 1,random(),random(),random(),random(),random(),random(),random(),random(),random(),random(),random()])])
 
 def NSApply(self, inputs):
-	#Start the Piece-Wise Linear thingy (let us commence forth)
-	#Calculate Boundaries... With this much math, it makes me wonder if this will really increase efficiency (compared to a single calc for all of the tensor by sigmoid)
 	b1 = LowerWrapper(inputs, self.bounds[0])
 	b2 = InnerWrapper(inputs, self.bounds[0], self.bounds[1])
 	b3 = InnerWrapper(inputs, self.bounds[1], self.bounds[2]) #tf.cast(tf.math.logical_and(tf.math.greater(inputs, self.pwlParams[1]), tf.math.less_equal(inputs, self.pwlParams[2])), inputs.dtype)

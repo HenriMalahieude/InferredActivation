@@ -24,9 +24,9 @@ def NNSigExtract(self):
 
 """
 Paths Tread:
-    * Multiplying the bound to the entire gradient (dy_dx), don't do that it ruins gradients in the upstream
+    * Multiplying the bound to the entire gradient (dy_dx), don't do that it ruins gradients in the upstream, yet also doesn't?
     * Making the entire dparams the same gradient, current iteration, /shrug?
-    * Funny enough, offsetting the gradients (dparams specifically) by 1 backwards seems to make it stable for some goddamn reason
+    * Funny enough, offsetting the gradients (dparams specifically) by 1 backwards (so it only touches the b of y=mx+b) seems to make it stable for some goddamn reason
     * Using reduce_sum seems to be a finnicky one, but makes it perform worse overall
 """
 

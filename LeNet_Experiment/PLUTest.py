@@ -50,3 +50,5 @@ ITModel.layers[9].Extract()
 print("\n")
 ITModel.layers[12].Extract()
 #"""
+
+#NOTE: gets around 95-98% accuracy after 5 epochs, really good. Very promising. Why is it better than simply linear equations?

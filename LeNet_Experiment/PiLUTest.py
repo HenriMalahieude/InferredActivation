@@ -38,5 +38,3 @@ Model.layers[5].Extract()
 Model.layers[7].Extract()
 Model.layers[9].Extract()
 Model.layers[12].Extract()
-
-#NOTE: Final average accuracy is around 0.1070 no matter what happens. So.... it's pretty bad lol

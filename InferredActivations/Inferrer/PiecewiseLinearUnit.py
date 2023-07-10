@@ -64,6 +64,7 @@ class PiecewiseLinearUnitV1(layers.Layer):
 		#Proposal: There is one thing left, that is making self.nheights[self.N+2] = self.nheights[self.N+1] if self.N != self.max_n
 		#		-> the reason for this is that when it reaches the next "interval" size, the right bound height suddenly becomes completely random making it think it 
 		# 			shouldn't grow the parameters if it's not a good height by chance
+		#NOTE: Fixed this by simply doing "linspace", though the network could train the other weights not used yet in hope of change which could be.... worrisome.
 
 		#This is the index tensor which will be indexing the self.nheight params...
 		idx_tensor = tf.math.floor(tf.math.divide(inputs - Bl, interval_length))
@@ -90,7 +91,7 @@ class PiecewiseLinearUnitV1(layers.Layer):
 		l2 = (inputs - Br) * Kr + tf.gather(self.nheight, tf.cast(intervals+1, dtype=tf.int32))
 		l3 = (inputs - Bidx_tensor) * Kidx_tensor + Yidx0_tensor
 
-		#Holy shit this was so fucking confusing....
+		#Holy shit that was convoluted
 		return b1*l1 + b2*l2 + b3*l3
 	
 	def Extract(self):
