@@ -8,19 +8,26 @@ class ActivationLinearizer(layers.Layer):
     def __init__(self, 
                  initial_eq: str = None, #'random' ; 'sigmoid' ; 'tanh' ; 'gelu'
                  divisions=6, #including outer bounds
+                 left_bound=-6,
+                 right_bound=6,
                  center_offset=0,
-                 interval_length: int = 5):
+                 interval_length: int = 5 #Encourage a interval length of this
+                 ):
         super(ActivationLinearizer, self).__init__()
+        assert self.left_bound < self.right_bound
+
         self.pw_count = max(divisions, 2) #why would we ever want to make this less than 2?
         self.center_offset = center_offset
         self.initialization = initial_eq if initial_eq != None else 'sigmoid'
         self.maximum_interval_length = max(abs(interval_length), 0.1)
+        self.left_bound = left_bound
+        self.right_bound = right_bound
 
     def build(self, input_shape):
         self.bounds = self.add_weight(shape=(self.pw_count-1,), initializer='ones', trainable=True)
         self.pwlParams = self.add_weight(shape=(self.pw_count*2,), initializer='ones', trainable=True)
 
-        noted_bounds = np.linspace(-6.0, 6.0, self.pw_count-1) #Bounds could be a param later
+        noted_bounds = np.linspace(self.left_bound, self.right_bound, self.pw_count-1) #Bounds could be a param later
         self.set_weights([noted_bounds, np.random.randn(self.pw_count*2)])
 
         if self.initialization == 'sigmoid':
@@ -31,8 +38,7 @@ class ActivationLinearizer(layers.Layer):
             InitAsExp(self, noted_bounds)
         elif self.initialization == 'gelu':
             InitAsGelu(self, noted_bounds)
-        else:
-            if self.initialization != 'random':
+        elif self.initialization != 'random':
                 print('ActivationLinearizer: initializer not implemented, defaulting to random')    
     
     def call(self, inputs):
@@ -64,7 +70,7 @@ def MapLinearsBetween(y, x):
         mp.append(b)
     return mp
 
-#I'm sure some function wrapping can make this simpler, but I don't have time/sanity for that
+#I'm sure some function wrapping can make this simpler, but meh
 def InitAsSigmoid(self, noted_bounds):
     def Sigmoid(x):
         return 1 / (1 + np.exp(-1 * x))
@@ -94,7 +100,7 @@ def InitAsExp(self, noted_bounds):
     points_to_map = np.exp(noted_bounds)
     vals = [0, 0]
     vals.extend(MapLinearsBetween(points_to_map, noted_bounds))
-    vals.extend([1, 0])
+    vals.extend(vals[-2:])
 
     self.set_weights([noted_bounds, np.array(vals)])
 
