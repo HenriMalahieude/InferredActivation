@@ -14,7 +14,7 @@ class ActivationLinearizer(layers.Layer):
                  interval_length: int = 5 #Encourage a interval length of this
                  ):
         super(ActivationLinearizer, self).__init__()
-        assert self.left_bound < self.right_bound
+        assert left_bound < right_bound
 
         self.pw_count = max(divisions, 2) #why would we ever want to make this less than 2?
         self.center_offset = center_offset
@@ -38,6 +38,8 @@ class ActivationLinearizer(layers.Layer):
             InitAsExp(self, noted_bounds)
         elif self.initialization == 'gelu':
             InitAsGelu(self, noted_bounds)
+        elif self.initialization == 'relu':
+            InitAsRelu(self, noted_bounds)
         elif self.initialization != 'random':
                 print('ActivationLinearizer: initializer not implemented, defaulting to random')    
     
@@ -111,6 +113,17 @@ def InitAsGelu(self, noted_bounds):
     points_to_map = GELU(noted_bounds)
     vals = [0, 0]
     vals.extend(MapLinearsBetween(points_to_map, noted_bounds))
+    vals.extend([1, 0])
+
+    self.set_weights([noted_bounds, np.array(vals)])
+
+def InitAsRelu(self, noted_bounds):
+    vals = [0, 0]
+    for i in range(len(noted_bounds)-1):
+        if noted_bounds[i] < 0:
+            vals.extend([0,0])
+        else:
+            vals.extend([1,0])
     vals.extend([1, 0])
 
     self.set_weights([noted_bounds, np.array(vals)])
