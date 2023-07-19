@@ -82,32 +82,32 @@ print("\tNumber of Devices: {}".format(strat.num_replicas_in_sync))
 with strat.scope():
     alex_net = tf.keras.models.Sequential()
     alex_net.add(tf.keras.layers.Conv2D(96, 11, strides=(4, 4), input_shape=IMAGE_SIZE))
-    alex_net.add(II.ActivationLinearizer(initial_eq='relu'))#tf.keras.layers.Activation('relu'))
+    alex_net.add(tf.keras.layers.Activation('relu'))
     alex_net.add(tf.keras.layers.AveragePooling2D(pool_size=(3, 3), strides=(2,2)))
 
     alex_net.add(tf.keras.layers.Conv2D(256, 5, padding='same'))
-    alex_net.add(II.ActivationLinearizer(initial_eq='relu'))#tf.keras.layers.Activation('relu'))
+    alex_net.add(tf.keras.layers.Activation('relu'))
     alex_net.add(tf.keras.layers.AveragePooling2D(pool_size=(3,3), strides=(2,2)))
 
     alex_net.add(tf.keras.layers.Conv2D(384, 3, padding='same'))
-    alex_net.add(II.ActivationLinearizer(initial_eq='relu'))#tf.keras.layers.Activation('relu'))
+    alex_net.add(tf.keras.layers.Activation('relu'))
     alex_net.add(tf.keras.layers.Conv2D(384, 3, padding='same'))
-    alex_net.add(II.ActivationLinearizer(initial_eq='relu'))#tf.keras.layers.Activation('relu'))
+    alex_net.add(tf.keras.layers.Activation('relu'))
     alex_net.add(tf.keras.layers.Conv2D(256, 3, padding='same'))
-    alex_net.add(II.ActivationLinearizer(initial_eq='relu'))#tf.keras.layers.Activation('relu'))
+    alex_net.add(tf.keras.layers.Activation('relu'))
     alex_net.add(tf.keras.layers.AveragePooling2D(pool_size=(3, 3), strides=(2,2)))
     alex_net.add(tf.keras.layers.Flatten())
 
     alex_net.add(tf.keras.layers.Dense(4096))
-    alex_net.add(II.ActivationLinearizer(initial_eq='relu'))#tf.keras.layers.Activation('relu'))
+    alex_net.add(tf.keras.layers.Activation('relu'))
     alex_net.add(tf.keras.layers.Dropout(DROPOUT_RATE))
 
     alex_net.add(tf.keras.layers.Dense(4096))
-    alex_net.add(II.ActivationLinearizer(initial_eq='relu'))#tf.keras.layers.Activation('relu'))
+    alex_net.add(tf.keras.layers.Activation('relu'))
     alex_net.add(tf.keras.layers.Dropout(DROPOUT_RATE))
 
     alex_net.add(tf.keras.layers.Dense(1000))
-    alex_net.add(II.ActivationLinearizer(initial_eq='relu'))#tf.keras.layers.Activation('relu'))
+    alex_net.add(tf.keras.layers.Activation('relu'))
 
     alex_net.add(tf.keras.layers.Dense(10)) #Number of Classes in our thing
     alex_net.add(tf.keras.layers.Activation('softmax'))
