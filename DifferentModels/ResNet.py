@@ -7,7 +7,7 @@ from keras.metrics import TopKCategoricalAccuracy
 
 IMAGE_SIZE = (224, 224, 3)
 BATCH_SIZE = 64
-DROPOUT_RATE = 0.5
+DROPOUT_RATE = 0.0 #Note used anywhere
 AUGMENT_DATA = True
 
 print("Starting ResNet sandbox")
