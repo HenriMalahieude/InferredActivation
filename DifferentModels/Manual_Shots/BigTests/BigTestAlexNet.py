@@ -12,7 +12,7 @@ for device in gpu_devices:
 
 BATCH_SIZE = 8
 IMAGE_SIZE = (227, 227, 3)
-DROPOUT_RATE = 0.5
+DROPOUT_RATE = 0.6
 AUGMENT_DATA = False
 CONCATENATE_AUGMENTATION = False
 
@@ -24,6 +24,7 @@ print("\nLoading in imagenet_sketch dataset")
 #imagenet_ds_builder.download_and_prepare(download_dir="~/tensorflow_datasets/downloads/manual")
 
 train_ds, val_ds, test_ds = tfds.load("imagenet2012", split=["train", "validation", "test"], as_supervised=True, batch_size=BATCH_SIZE)
+
 print("\t" + str(train_ds.cardinality() * BATCH_SIZE) + " training images loaded.")
 print("\t" + str(val_ds.cardinality() * BATCH_SIZE) + " validation images loaded.")
 
@@ -119,5 +120,5 @@ then = time.time()
 alex_net.evaluate(test_data)
 print("Took {}ms".format(int(((time.time() - then) * 1000))))
 
-
+#-------------------------------100 Epochs with 25 Minimum Epochs
 #Control ->

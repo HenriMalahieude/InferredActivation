@@ -4,7 +4,7 @@ import InferredActivations.Inferrer.ActivationFunctions as IA
 import LeNet_Experiment.Global as G
 from keras import models, layers
 
-logging.basicConfig(filename='infer_pilu.log', encoding='utf-8',level=logging.DEBUG)
+logging.basicConfig(filename='infer_pilu.log', encoding='utf-8', level=logging.DEBUG)
 
 Model = models.Sequential()
 Model.add(layers.Conv2D(6, 5, activation=None, input_shape=G.x_train.shape[1:]))
