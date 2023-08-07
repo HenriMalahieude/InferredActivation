@@ -1,4 +1,3 @@
-import sys
 import logging
 import tensorflow as tf
 import tensorflow_datasets as tfds
@@ -11,19 +10,16 @@ from keras.metrics import TopKCategoricalAccuracy
 logger = logging.getLogger("internal_Logger_wo__imports")
 logger.setLevel(logging.DEBUG)
 fileHandle = logging.FileHandler(filename="alexnet_testing_suite.log")
-streamHandle = logging.StreamHandler(sys.stdout)
 
 formatter = logging.Formatter(fmt='%(message)s')
 fileHandle.setFormatter(formatter)
-streamHandle.setFormatter(formatter)
 
 logger.addHandler(fileHandle)
-#logger.addHandler(streamHandle)
 
-TOTAL_EPOCHS = 10
+TOTAL_EPOCHS = 50
 BATCH_SIZE = 32
 IMAGE_SIZE = (227, 227, 3)
-DROPOUT_RATE = 0.25
+DROPOUT_RATE = 0.5
 AUGMENT_DATA = True
 CONCATENATE_AUGMENT = True
 
@@ -37,32 +33,38 @@ resize_and_rescale = tf.keras.models.Sequential([
     layers.Rescaling(1./255),
 ])
 
+data_augmentation = tf.keras.models.Sequential([
+    layers.Resizing(IMAGE_SIZE[0]*3, IMAGE_SIZE[1]*3),
+    layers.RandomCrop(IMAGE_SIZE[0]*2, IMAGE_SIZE[0]*2),
+    layers.RandomFlip(),
+    resize_and_rescale
+])
+
 def preprocess1(x, y):
     return resize_and_rescale(x, training=True), y
 
-train_data = train_ds.map(preprocess1)
-val_data = val_ds.map(preprocess1)
+def preprocess2(x, y):
+    return data_augmentation(x, training=True), y
 
-if AUGMENT_DATA:
-    print("\tAugmenting Data")
-    data_augmentation = tf.keras.models.Sequential([
-        #layers.RandomZoom((-0.5, -0.25), (-0.5, -0.25)),
-        layers.RandomZoom((0, -0.25)),
-        layers.Resizing(IMAGE_SIZE[0]*2, IMAGE_SIZE[1]*2),
-        layers.RandomCrop(IMAGE_SIZE[0], IMAGE_SIZE[0]),
-        layers.RandomFlip(),
-        resize_and_rescale
-    ])
-
-    def preprocess2(x, y):
-        return data_augmentation(x, training=True), y
+def prepare_dataset(ds, augment=False):
+    dsn = ds.map(preprocess1, num_parallel_calls=tf.data.AUTOTUNE, deterministic=False)
     
-    if CONCATENATE_AUGMENT:
-        print("\tConcatenating Augment")
-        train_data = train_data.concatenate(train_ds.map(preprocess2))
-    else:
-        print("\tReplacing Original with Augment")
-        train_data = train_ds.map(preprocess2)
+    if augment:
+        print("\tAugmenting Data")
+        if CONCATENATE_AUGMENT:
+            print("\t\tConcatenating Augment")
+            dsn = dsn.concatenate(ds.map(preprocess2))
+        else:
+            print("\t\tReplacing Original with Augment")
+            dsn = ds.map(preprocess2)
+
+    dsn.batch(BATCH_SIZE)
+
+    print("\tDataset Prepared")
+    return dsn.prefetch(buffer_size=tf.data.AUTOTUNE) #Sometimes, it's the simple things that make all the difference
+
+train_data = prepare_dataset(train_ds, AUGMENT_DATA)
+val_data = prepare_dataset(val_ds)
 
 #Define the Model
 print("\nDefining The Model")
@@ -298,16 +300,18 @@ with strat.scope():
         models_to_test.append(new_model)
 
 print("\nBeginning Testing Suite")
-for model in models_to_test:
+start_at = 2
+for i in range(len(models_to_test)-start_at):
+    model = models_to_test[i+start_at]
     print("\tTraining " + model.name)
     fit_then = time.time()
-    fit_data = model.fit(train_data, epochs=TOTAL_EPOCHS, verbose=0, validation_data=val_data, callbacks=cllbcks_to_use)
+    fit_data = model.fit(train_data, epochs=TOTAL_EPOCHS, verbose=2, validation_data=val_data, callbacks=cllbcks_to_use)
     fit_time = time.time() - fit_then
 
     print("\n\t\tEvaluating " + model.name)
 
     eval_then = time.time()
-    eval_data = model.evaluate(val_data, verbose=0)
+    eval_data = model.evaluate(val_data, verbose=2)
     eval_time = time.time() - eval_then
 
     #Best And Worst Epochs
@@ -321,7 +325,7 @@ for model in models_to_test:
         if BestTop1 < fit_data.history["val_T1"][i]:
             BestEpoch = i
             BestTop1 = fit_data.history["val_T1"][i]
-        elif BestTop1 == 0 and BestEpoch == 0:
+        elif BestTop1 <= 0.00001:
             if BestTop3 < fit_data.history["val_T3"][i]:
                 BestEpoch = i
                 BestTop3 = fit_data.history["val_T3"][i]
@@ -329,14 +333,22 @@ for model in models_to_test:
                 BestEpoch = i
                 BestTop5 = fit_data.history["val_T5"][i]
 
-        if WorsTop1 > fit_data.history["val_T1"][i]:
+        if WorsTop5 > fit_data.history["val_T5"][i]:
             WorsEpoch = i
-            WorsTop1 = fit_data.history["val_T1"][i]
+            WorsTop5 = fit_data.history["val_T5"][i]
+        elif WorsTop5 >= 0.9999:
+            if WorsTop3 > fit_data.history["val_T3"][i]:
+                WorsEpoch = i
+                WorsTop3 = fit_data.history["val_T3"][i]
+            elif WorsTop3 == 1 and (WorsTop1 > fit_data.history["val_T1"][i]):
+                WorsEpoch = i
+                WorsTop1 = fit_data.history["val_T1"][i]
 
     final_log_info = model.name + " results:\n\tTest-Evaluation Top 5: " + str(eval_data[1]) + ", Top 3: " + str(eval_data[2]) + ", Top 1: "  + str(eval_data[-1])
-    final_log_info += "\n\tFinal Training Accuracies were Top 5: " + str(fit_data.history["val_T5"][-1]) + ", Top 3: " + str(fit_data.history["val_T3"][-1]) + ", Top 1: " + str(fit_data.history["val_T1"][-1])
-    final_log_info += "\n\tBest Training Epoch was (" + str(BestEpoch) + ") Top 5: " + str(fit_data.history["val_T5"][BestEpoch]) + ", Top 3: " + str(fit_data.history["val_T3"][BestEpoch]) + ", Top 1: "  + str(BestTop1)
-    final_log_info += "\n\tWorst Training Epoch was (" + str(WorsEpoch) + ") Top 5: " + str(fit_data.history["val_T5"][WorsEpoch]) + ", Top 3: " + str(fit_data.history["val_T3"][WorsEpoch]) + ", Top 1: "  + str(WorsTop1)
+    final_log_info += "\n\tFVAs were Top 5: " + str(fit_data.history["val_T5"][-1]) + ", Top 3: " + str(fit_data.history["val_T3"][-1]) + ", Top 1: " + str(fit_data.history["val_T1"][-1])
+    final_log_info += "\n\tBest Epoch was (" + str(BestEpoch+1) + ") w/ Top 5: " + str(fit_data.history["val_T5"][BestEpoch]) + ", Top 3: " + str(fit_data.history["val_T3"][BestEpoch]) + ", Top 1: "  + str(fit_data.history["val_T1"][BestEpoch])
+    final_log_info += "\n\tWorst Epoch was (" + str(WorsEpoch+1) + ") w/ Top 5: " + str(fit_data.history["val_T5"][WorsEpoch]) + ", Top 3: " + str(fit_data.history["val_T3"][WorsEpoch]) + ", Top 1: "  + str(fit_data.history["val_T1"][WorsEpoch])
     final_log_info += "\n\tTraining Time was: " + str(int(fit_time)) + "s, Evaluation Time was: " + str(int(eval_time)) + "s"
     final_log_info += "\n\tNaN Check: " + str(fit_data.history["loss"][-1]) + ", " + str(fit_data.history["val_loss"][-1])
-    logger.info(final_log_info + "\n")
+    final_log_info += "\n"
+    logger.info(final_log_info)
