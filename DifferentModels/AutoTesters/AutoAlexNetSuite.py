@@ -23,7 +23,7 @@ DROPOUT_RATE = 0.5
 AUGMENT_DATA = True
 CONCATENATE_AUGMENT = True
 
-print("Starting AlexNet Sandbox")
+print("Starting AlexNet Auto Tester")
 print("\t{} Epochs\n\tBatched in {}\n\tDropout Rate of {}".format(TOTAL_EPOCHS, BATCH_SIZE, DROPOUT_RATE))
 print("\nLoading imagenette")
 train_ds, val_ds = tfds.load("imagenette", split=['train', 'validation'], as_supervised=True, batch_size=BATCH_SIZE)

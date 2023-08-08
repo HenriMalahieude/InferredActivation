@@ -1,0 +1,56 @@
+Control-Alex results:
+	Test-Evaluation Top 5: 0.0, Top 3: 0.0, Top 1: 0.0
+	FVAs were Top 5: 0.0, Top 3: 0.0, Top 1: 0.0
+	Best Epoch was (1) w/ Top 5: 0.0, Top 3: 0.0, Top 1: 0.0
+	Worst Epoch was (1) w/ Top 5: 0.0, Top 3: 0.0, Top 1: 0.0
+	Training Time was: 7101s, Evaluation Time was: 8s
+	NaN Check: 2.3022091388702393, 2.3039023876190186
+
+FullPLU-Alex results:
+	Test-Evaluation Top 5: 0.3605095446109772, Top 3: 0.2527388632297516, Top 1: 0.1324840784072876
+	FVAs were Top 5: 0.3605095446109772, Top 3: 0.2527388632297516, Top 1: 0.1324840784072876
+	Best Epoch was (18) w/ Top 5: 0.9735031723976135, Top 3: 0.9411464929580688, Top 1: 0.7472611665725708
+	Worst Epoch was (3) w/ Top 5: 0.0, Top 3: 0.0, Top 1: 0.0
+	Training Time was: 7726s, Evaluation Time was: 9s
+	NaN Check: 1.2727108001708984, 1.531619668006897
+
+HalfBotPLU-Alex results:
+	Test-Evaluation Top 5: 0.0, Top 3: 0.0, Top 1: 0.0
+	FVAs were Top 5: 0.0, Top 3: 0.0, Top 1: 0.0
+	Best Epoch was (1) w/ Top 5: 0.0, Top 3: 0.0, Top 1: 0.0
+	Worst Epoch was (1) w/ Top 5: 0.0, Top 3: 0.0, Top 1: 0.0
+	Training Time was: 7645s, Evaluation Time was: 9s
+	NaN Check: 2.30220890045166, 2.3039016723632812
+
+HalfTopPLU-Alex results:
+	Test-Evaluation Top 5: 0.23949044942855835, Top 3: 0.15592356026172638, Top 1: 0.07414012402296066
+	FVAs were Top 5: 0.23949044942855835, Top 3: 0.15592356026172638, Top 1: 0.07414012402296066
+	Best Epoch was (20) w/ Top 5: 0.9597452282905579, Top 3: 0.7814012765884399, Top 1: 0.34140127897262573
+	Worst Epoch was (4) w/ Top 5: 0.20382165908813477, Top 3: 0.0, Top 1: 0.0
+	Training Time was: 7321s, Evaluation Time was: 9s
+	NaN Check: 0.8998549580574036, 1.5026376247406006
+
+FullAL-Alex results:
+	Test-Evaluation Top 5: 1.0, Top 3: 1.0, Top 1: 0.0
+	FVAs were Top 5: 1.0, Top 3: 1.0, Top 1: 0.0
+	Best Epoch was (2) w/ Top 5: 0.434394896030426, Top 3: 0.403312087059021, Top 1: 0.017834395170211792
+	Worst Epoch was (2) w/ Top 5: 0.434394896030426, Top 3: 0.403312087059021, Top 1: 0.017834395170211792
+	Training Time was: 7253s, Evaluation Time was: 8s
+	NaN Check: 2.3467652797698975, 2.3591809272766113
+
+HalfBotAL-Alex results:
+	Test-Evaluation Top 5: 0.0, Top 3: 0.0, Top 1: 0.0
+	FVAs were Top 5: 0.0, Top 3: 0.0, Top 1: 0.0
+	Best Epoch was (1) w/ Top 5: 0.0, Top 3: 0.0, Top 1: 0.0
+	Worst Epoch was (1) w/ Top 5: 0.0, Top 3: 0.0, Top 1: 0.0
+	Training Time was: 7274s, Evaluation Time was: 8s
+	NaN Check: 2.302211046218872, 2.3039026260375977
+
+HalfTopAL-Alex results:
+	Test-Evaluation Top 5: 1.0, Top 3: 0.0, Top 1: 0.0
+	FVAs were Top 5: 1.0, Top 3: 0.0, Top 1: 0.0
+	Best Epoch was (1) w/ Top 5: 0.8504458665847778, Top 3: 0.765605092048645, Top 1: 0.6285350322723389
+	Worst Epoch was (3) w/ Top 5: 0.0, Top 3: 0.0, Top 1: 0.0
+	Training Time was: 7252s, Evaluation Time was: 8s
+	NaN Check: 2.347106456756592, 2.3591251373291016
+
