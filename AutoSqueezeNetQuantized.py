@@ -1,15 +1,16 @@
+import time
 import logging
 import tensorflow as tf
 import tensorflow_datasets as tfds
-import time
+import tensorflow_model_optimization as tfmot
 import InferredActivations.Inferrer as II
-from keras import layers
+from keras import layers, models
 from keras.metrics import TopKCategoricalAccuracy
 
 #Logging Set up
 logger = logging.getLogger("internal_Logger_wo__imports")
 logger.setLevel(logging.DEBUG)
-fileHandle = logging.FileHandler(filename="resnet_testing_suite.log")
+fileHandle = logging.FileHandler(filename="squeeze_testing_suite.log")
 
 formatter = logging.Formatter(fmt='%(message)s')
 fileHandle.setFormatter(formatter)
@@ -22,7 +23,7 @@ IMAGE_SIZE = (224, 224, 3)
 AUGMENT_DATA = True
 CONCATENATE_AUGMENT = False
 
-print("Starting Residual Auto Tester")
+print("Starting Squeeze Net Auto Tester")
 print("\t{} Epochs\n\tBatched in {}".format(TOTAL_EPOCHS, BATCH_SIZE))
 print("\nLoading imagenette")
 train_ds, val_ds = tfds.load("imagenette", split=['train', 'validation'], as_supervised=True, batch_size=BATCH_SIZE)
@@ -66,238 +67,168 @@ def prepare_dataset(ds, augment=False):
 train_data = prepare_dataset(train_ds, AUGMENT_DATA)
 val_data = prepare_dataset(val_ds)
 
-print("\nModel Management")
-print("\tDefining Residual Layer")
-class ResidualBlock(layers.Layer):
-    def __init__(self, 
-                 filters = (64, 64, 256), 
-                 activation_1 = layers.Activation("relu"),
-                 activation_2 = layers.Activation("relu"),
-                 activation_3 = layers.Activation("relu")):
-        super(ResidualBlock, self).__init__()
-        self.filters = filters
-        self.a1 = activation_1
-        self.a2 = activation_2
-        self.a3 = activation_3
+print("\nModel Definitions")
+print("\tDefining Fire Module")
+class FireModule(layers.Layer):
+    def __init__(self, squeeze=16, expand=64 , a1=layers.Activation('relu'), a2=layers.Activation('relu'), a3=layers.Activation('relu')):
+        super(FireModule, self).__init__()
+        self.squeeze=squeeze
+        self.expand=expand
+
+        self.activation1 = a1
+        self.activation2 = a2
+        self.activation3 = a3
 
     def build(self, input_shape):
-        f1, f2, f3 = self.filters
-        channel_increase = not (input_shape[-1] == f3)
-        stride = 1
-        if channel_increase: stride = 2
-
-        self.plain = tf.keras.models.Sequential([
-            layers.Conv2D(f1, 1, strides=stride),
-            layers.BatchNormalization(),
-            self.a1,
-
-            layers.Conv2D(f2, 3, padding='same'),
-            layers.BatchNormalization(),
-            self.a2,
-
-            layers.Conv2D(f3, 1),
-            layers.BatchNormalization(),
+        self.sLayer = models.Sequential([
+            layers.Conv2D(self.squeeze, 1),
+            self.activation1,
         ])
 
-        
-        if channel_increase:
-            self.id_pass = tf.keras.models.Sequential([
-                layers.Conv2D(f3, 1, strides=stride),
-                layers.BatchNormalization(),
-            ])
-        else:
-            self.id_pass = layers.BatchNormalization()
+        self.eOneLayer = models.Sequential([
+            layers.Conv2D(self.expand, 1),
+            self.activation2,
+        ])
 
-        self.final_pass = self.a3
-    
+        self.eThreeLayer = models.Sequential([
+            layers.Conv2D(self.expand, 3, padding='same'),
+            self.activation3,
+        ])
+
+        self.sLayer.build(input_shape)
+        self.eOneLayer.build(self.sLayer.compute_output_shape(input_shape))
+        self.eThreeLayer.build(self.sLayer.compute_output_shape(input_shape))
+
     def call(self, input):
-        return self.final_pass(self.plain(input) + self.id_pass(input))
+        x = self.sLayer(input)
 
-print("\tDefining Control Model")
-control_architecture = [
+        left = self.eOneLayer(x)
+        right = self.eThreeLayer(x)
+
+        return layers.concatenate([left, right], axis=3)
+    
+print("\tDefining Control Architecture")
+control_arch = [
     #0
     {
         "lyrFn": layers.Conv2D,
-        "args": [64, 7],
-        "kwargs": {"strides": 2}
+        "args": [96, 7],
+        "kwargs": {"strides": 2},
     },
 
     #1
-    {
-        "lyrFn": layers.BatchNormalization,
-        "args": [],
-        "kwargs": {},
-    },
-
-    #2
-    {
-        "lyrFn": layers.Activation,
-        "args": ["relu"],
-        "kwargs": {},
-    },
-
-    #3
     {
         "lyrFn": layers.MaxPooling2D,
         "args": [3, 2],
         "kwargs": {},
     },
 
+    #2
+    {
+        "lyrFn": FireModule,
+        "args": [],
+        "kwargs": {},
+    },
+
+    #3
+    {
+        "lyrFn": FireModule,
+        "args": [],
+        "kwargs": {},
+    },
+
     #4
     {
-        "lyrFn": ResidualBlock,
-        "args": [(64, 64, 256)],
+        "lyrFn": FireModule,
+        "args": [32, 128],
         "kwargs": {},
     },
 
     #5
     {
-        "lyrFn": ResidualBlock,
-        "args": [(64, 64, 256)],
+        "lyrFn": layers.MaxPooling2D,
+        "args": [3, 2],
         "kwargs": {},
     },
 
     #6
     {
-        "lyrFn": ResidualBlock,
-        "args": [(64, 64, 256)],
+        "lyrFn": FireModule,
+        "args": [32, 128],
         "kwargs": {},
     },
 
     #7
     {
-        "lyrFn": ResidualBlock,
-        "args": [(128, 128, 512)],
+        "lyrFn": FireModule,
+        "args": [48, 192],
         "kwargs": {},
     },
 
     #8
     {
-        "lyrFn": ResidualBlock,
-        "args": [(128, 128, 512)],
+        "lyrFn": FireModule,
+        "args": [48, 192],
         "kwargs": {},
     },
 
     #9
     {
-        "lyrFn": ResidualBlock,
-        "args": [(128, 128, 512)],
+        "lyrFn": FireModule,
+        "args": [64, 256],
         "kwargs": {},
     },
 
     #10
     {
-        "lyrFn": ResidualBlock,
-        "args": [(256, 256, 1024)],
+        "lyrFn": layers.MaxPooling2D,
+        "args": [3, 2],
         "kwargs": {},
     },
 
     #11
     {
-        "lyrFn": ResidualBlock,
-        "args": [(256, 256, 1024)],
+        "lyrFn": FireModule,
+        "args": [64, 256],
         "kwargs": {},
     },
 
     #12
     {
-        "lyrFn": ResidualBlock,
-        "args": [(256, 256, 1024)],
+        "lyrFn": layers.Conv2D,
+        "args": [1000, 1, 1],
         "kwargs": {},
     },
 
     #13
     {
-        "lyrFn": ResidualBlock,
-        "args": [(256, 256, 1024)],
+        "lyrFn": layers.AveragePooling2D,
+        "args": [12, 1],
         "kwargs": {},
     },
 
     #14
     {
-        "lyrFn": ResidualBlock,
-        "args": [(256, 256, 1024)],
+        "lyrFn": layers.Activation,
+        "args": ["relu"],
         "kwargs": {},
     },
 
     #15
-    {
-        "lyrFn": ResidualBlock,
-        "args": [(256, 256, 1024)],
-        "kwargs": {},
-    },
-
-    #16
-    {
-        "lyrFn": ResidualBlock,
-        "args": [(512, 512, 2048)],
-        "kwargs": {},
-    },
-
-    #17
-    {
-        "lyrFn": ResidualBlock,
-        "args": [(512, 512, 2048)],
-        "kwargs": {},
-    },
-
-    #18
-    {
-        "lyrFn": ResidualBlock,
-        "args": [(512, 512, 2048)],
-        "kwargs": {},
-    },
-
-    #19
-    {
-        "lyrFn": layers.AveragePooling2D,
-        "args": [2],
-        "kwargs": {"padding": "same"},
-    },
-
-    #20
     {
         "lyrFn": layers.Flatten,
         "args": [],
         "kwargs": {},
     },
 
-    #21
-    {
-        "lyrFn": layers.Dense,
-        "args": [256],
-        "kwargs": {},
-    },
-
-    #22
-    {
-        "lyrFn": layers.Activation,
-        "args": ["relu"],
-        "kwargs": {},
-    },
-
-    #23
-    {
-        "lyrFn": layers.Dense,
-        "args": [128],
-        "kwargs": {},
-    },
-
-    #24
-    {
-        "lyrFn": layers.Activation,
-        "args": ["relu"],
-        "kwargs": {},
-    },
-
-    #25
+    #16
     {
         "lyrFn": layers.Dense,
         "args": [10],
         "kwargs": {},
     },
 
-    #26
+    #17
     {
         "lyrFn": layers.Activation,
         "args": ["softmax"],
@@ -305,83 +236,77 @@ control_architecture = [
     },
 ]
 
-#Mostly for easy access
-raw_activation_indices = [2, 22, 24]
-raw_softmax_index = [26]
-residual_block_indices = [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18] #4 - 18
+#Primarily Notes for myself
+raw_activations_normal_indices =  [14]
+raw_activations_softmax_indices = [17]
+fire_module_indices = [2, 3, 4, 6, 7, 8, 9, 11]
 
-print("\tDefining Buildables")
+print("\nDefining Buildable Models")
 buildables = [
     {
-        "name": "Control-Residual",
+        "name": "Control-Squeeze",
+        "quantized": False,
         "lyr_indices": [],
+        #"lyr_replacement": layers.Activation,
+        #"lyr_args": ["relu"],
+        #"lyr_kwargs": {},
         "kwarg_indices": [],
+        #"kwarg_replacement": {},
     },
 
     {
-        "name": "RawTopPLUs",
-        "lyr_indices": [22, 24],
+        "name": "Control-Squeeze-Quantized",
+        "quantized": True,
+        "lyr_indices": [],
+        #"lyr_replacement": layers.Activation,
+        #"lyr_args": ["relu"],
+        #"lyr_kwargs": {},
+        "kwarg_indices": [],
+        #"kwarg_replacement": {},
+    },
+
+    {
+        "name": "FullPLUs",
+        "quantized": False,
+        "lyr_indices": [14],
         "lyr_replacement": II.PiecewiseLinearUnitV1,
-        "args_lyr": [],
-        "kwargs_lyr": [],
-        "kwarg_indices": [],
+        "lyr_args": [],
+        "lyr_kwargs": {},
+        "kwarg_indices": [2, 3, 4, 6, 7, 8, 9, 11],
+        "kwarg_replacement": {"a1": II.PiecewiseLinearUnitV1(), "a2": II.PiecewiseLinearUnitV1(), "a3": II.PiecewiseLinearUnitV1()},
     },
 
     {
-        "name": "PartialTopPLUs", #Inclusive
-        "lyr_indices": [],
-        "kwarg_indices": [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18],
-        "kwarg_replacement": {"activation_2": II.PiecewiseLinearUnitV1(), "activation_3": II.PiecewiseLinearUnitV1()},
-    },
-
-    {
-        "name": "PartialBotPLUs", #Inclusive
-        "lyr_indices": [],
-        "kwarg_indices": [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18],
-        "kwarg_replacement": {"activation_1": II.PiecewiseLinearUnitV1(), "activation_2": II.PiecewiseLinearUnitV1()},
-    },
-
-    {
-        "name": "FullResPLUs",
-        "lyr_indices": [2, 22, 24],
+        "name": "FullPLUs-Quantized",
+        "quantized": True,
+        "lyr_indices": [14],
         "lyr_replacement": II.PiecewiseLinearUnitV1,
-        "args_lyr": [],
-        "kwargs_lyr": [],
-        "kwarg_indices": [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18],
-        "kwarg_replacement": {"activation_1": II.PiecewiseLinearUnitV1(), "activation_2": II.PiecewiseLinearUnitV1(), "activation_3": II.PiecewiseLinearUnitV1()},
+        "lyr_args": [],
+        "lyr_kwargs": {},
+        "kwarg_indices": [2, 3, 4, 6, 7, 8, 9, 11],
+        "kwarg_replacement": {"a1": II.PiecewiseLinearUnitV1(), "a2": II.PiecewiseLinearUnitV1(), "a3": II.PiecewiseLinearUnitV1()},
     },
 
     {
-        "name": "RawTopALs",
-        "lyr_indices": [22, 24],
+        "name": "FullALs",
+        "quantized": False,
+        "lyr_indices": [14],
         "lyr_replacement": II.ActivationLinearizer,
-        "args_lyr": ["relu"],
-        "kwargs_lyr": [],
-        "kwarg_indices": [],
+        "lyr_args": ["relu"],
+        "lyr_kwargs": {},
+        "kwarg_indices": [2, 3, 4, 6, 7, 8, 9, 11],
+        "kwarg_replacement": {"a1": II.ActivationLinearizer("relu"), "a2": II.ActivationLinearizer("relu"), "a3": II.ActivationLinearizer("relu")},
     },
 
     {
-        "name": "PartialTopALs", #Inclusive
-        "lyr_indices": [],
-        "kwarg_indices": [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18],
-        "kwarg_replacement": {"activation_2": II.ActivationLinearizer("relu"), "activation_3": II.ActivationLinearizer("relu")},
-    },
-
-    {
-        "name": "PartialBotALs", #Inclusive
-        "lyr_indices": [],
-        "kwarg_indices": [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18],
-        "kwarg_replacement": {"activation_1": II.ActivationLinearizer("relu"), "activation_2": II.ActivationLinearizer("relu")},
-    },
-
-    {
-        "name": "FullResALs",
-        "lyr_indices": [2, 22, 24],
+        "name": "FullALs-Quantized",
+        "quantized": True,
+        "lyr_indices": [14],
         "lyr_replacement": II.ActivationLinearizer,
-        "args_lyr": ["relu"],
-        "kwargs_lyr": [],
-        "kwarg_indices": [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18],
-        "kwarg_replacement": {"activation_1": II.ActivationLinearizer("relu"), "activation_2": II.ActivationLinearizer("relu"), "activation_3": II.ActivationLinearizer("relu")},
+        "lyr_args": ["relu"],
+        "lyr_kwargs": {},
+        "kwarg_indices": [2, 3, 4, 6, 7, 8, 9, 11],
+        "kwarg_replacement": {"a1": II.ActivationLinearizer("relu"), "a2": II.ActivationLinearizer("relu"), "a3": II.ActivationLinearizer("relu")},
     },
 ]
 
@@ -396,24 +321,28 @@ with strat.scope():
     
     models_to_test = []
     for k in buildables:
-        new_model = tf.keras.models.Sequential(name=k["name"])
+        new_model = models.Sequential(name=k["name"])
 
-        for i in range(len(control_architecture)):
-            lyrFn = control_architecture[i]["lyrFn"]
-            args = control_architecture[i]["args"]
-            kwargs = control_architecture[i]["kwargs"]
+        for i in range(len(control_arch)):
+            lyrFn = control_arch[i]["lyrFn"]
+            args = control_arch[i]["args"]
+            kwargs = control_arch[i]["kwargs"]
 
             if i in k["lyr_indices"]: #Replace that layer
                 lyrFn = k["lyr_replacement"]
-                args = k["args_lyr"]
-                kwargs = k["kwargs_lyr"]
-            elif i in k["kwarg_indices"]: #Replace their kwargs
+                args = k["lyr_args"]
+                kwargs = k["lyr_kwargs"]
+            elif i in k["kwarg_indices"]:
                 kwargs = k["kwarg_replacement"]
-            
+
             new_model.add(lyrFn(*args, **kwargs))
 
-        new_model.compile(optimizer="adam", loss=tf.keras.losses.SparseCategoricalCrossentropy(), metrics=metrics_to_use)
         new_model.build((None, *IMAGE_SIZE))
+
+        if k["quantized"]:
+            new_model = tfmot.quantization.keras.quantize_model(new_model)
+
+        new_model.compile(optimizer="adam", loss=tf.keras.losses.SparseCategoricalCrossentropy(), metrics=metrics_to_use)        
         models_to_test.append(new_model)
 
 print("\nStarting Testing Suite")
@@ -440,7 +369,7 @@ for i in range(len(models_to_test)-start_at):
         if BestTop1 < fit_data.history["val_T1"][i]:
             BestEpoch = i
             BestTop1 = fit_data.history["val_T1"][i]
-        elif BestTop1 <= 0.05:
+        elif BestTop1 <= 0.001:
             if BestTop3 < fit_data.history["val_T3"][i]:
                 BestEpoch = i
                 BestTop3 = fit_data.history["val_T3"][i]
@@ -451,7 +380,7 @@ for i in range(len(models_to_test)-start_at):
         if WorsTop5 >= fit_data.history["val_T5"][i]:
             WorsEpoch = i
             WorsTop5 = fit_data.history["val_T5"][i]
-        elif WorsTop5 >= 0.95:
+        elif WorsTop5 >= 0.999:
             if WorsTop3 >= fit_data.history["val_T3"][i]:
                 WorsEpoch = i
                 WorsTop3 = fit_data.history["val_T3"][i]

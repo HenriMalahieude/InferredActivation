@@ -7,7 +7,6 @@ from keras.metrics import TopKCategoricalAccuracy
 
 IMAGE_SIZE = (224, 224, 3)
 BATCH_SIZE = 64
-DROPOUT_RATE = 0.0 #Note used anywhere
 AUGMENT_DATA = True
 
 print("Starting ResNet sandbox")
@@ -153,8 +152,6 @@ with strat.scope():
 
 
 print("\nTraining Model, Stats:")
-print("\tDropout: {}".format(DROPOUT_RATE))
-
 #optim = tf.keras.optimizers.Adam(learning_rate=0.0005) #NOTE: Seems that I can't do anything to the optim. or it will just freeze forever
 
 res_net.compile(optimizer="adam", loss=tf.keras.losses.SparseCategoricalCrossentropy(), metrics=metrics_to_use)

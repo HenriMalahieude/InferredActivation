@@ -156,7 +156,14 @@ class MPTimeseriesGenerator(Sequence):
                 # Z-normalize the subsequences
                 mu = np.mean(samples[j, :, i, -self.mp_window:], axis=1)
                 sigma = np.std(samples[j, :, i, -self.mp_window:], axis=1)
+                
+                #if np.any(np.isnan(mu)): raise ValueError("mu got nan?")
+                #if np.any(np.isnan(sigma)): raise ValueError("sigma got nan?")
+                #if np.any(np.isnan(samples)): raise ValueError("samples initialized to nan?")
+
                 samples[j, :, i, :] = (samples[j, :, i, :] - mu[:,np.newaxis]) / sigma[:,np.newaxis]
+
+                #if np.any(np.isnan(samples)): raise ValueError("Cannot return NaN")
                 # Outputs start from current row and proceed into the future
                 targets[j, :, i] = self.targets[row:row + self.num_outputs, i]
         if self.recurrent:
