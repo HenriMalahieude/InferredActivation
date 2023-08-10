@@ -11,6 +11,7 @@ from keras import layers#, initializers
 	def __call__(self, shape, dtype=None, **kwargs):"""
 
 #Referenced: https://github.com/MrGoriay/pwlu-pytorch/blob/main/PWLA.py
+@tf.keras.saving.register_keras_serializable('InferredActivation')
 class PiecewiseLinearUnitV1(layers.Layer):
 	def __init__(self, max_params=20, interval_start=5, momentum=0.9):
 		super(PiecewiseLinearUnitV1, self).__init__()
@@ -22,6 +23,26 @@ class PiecewiseLinearUnitV1(layers.Layer):
 		self.momentum = momentum
 
 		self.collect_stats = False
+
+	def get_config(self):
+		base_config = super().get_config()
+		config = {
+			"max_n": self.max_n,
+			"N_start": self.N_start,
+			"running_avg": self.running_avg,
+			"running_std": self.running_std,
+			"momentum": self.momentum,
+			"collect_stats": self.collect_stats
+		}
+		return {**base_config, **config}
+
+	@classmethod
+	def from_config(cls, config):
+		lyr = PiecewiseLinearUnitV1(config["max_n"], config["N_start"], config["momentum"])
+		lyr.running_avg = config["running_avg"]
+		lyr.running_std = config["running_std"]
+		lyr.collect_stats = config["collect_stats"]
+		return lyr
 
 	def build(self, input_shape):
 		self.N = self.add_weight(shape=(), initializer='one', trainable=True)

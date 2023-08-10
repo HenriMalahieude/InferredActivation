@@ -1,9 +1,10 @@
 import numpy as np
 import math
-#import tensorflow as tf
+import tensorflow as tf
 from .ActivationFunctions.CustomGradients import LinearBounds
 from keras import layers
 
+@tf.keras.saving.register_keras_serializable('InferredActivation')
 class ActivationLinearizer(layers.Layer):
     def __init__(self, 
                  initial_eq: str = None, #'random' ; 'sigmoid' ; 'tanh' ; 'gelu'
@@ -23,6 +24,23 @@ class ActivationLinearizer(layers.Layer):
         self.left_bound = left_bound
         self.right_bound = right_bound
 
+    def get_config(self):
+        base_config = super().get_config()
+        config = {
+            "pw_count": self.pw_count, 
+            "center_offset": self.center_offset, 
+            "initialization": self.initialization, 
+            "maximum_interval_length": self.maximum_interval_length,
+            "left_bound": self.left_bound,
+            "right_bound": self.right_bound
+        }
+
+        return {**base_config, **config}
+
+    @classmethod
+    def from_config(cls, config):
+        return ActivationLinearizer(config["initialization"], config["pw_count"], config["left_bound"], config["right_bound"], config["center_offset"], config["maximum_interval_length"])
+
     def build(self, input_shape):
         self.bounds = self.add_weight(shape=(self.pw_count-1,), initializer='ones', trainable=True)
         self.pwlParams = self.add_weight(shape=(self.pw_count*2,), initializer='ones', trainable=True)
@@ -41,7 +59,7 @@ class ActivationLinearizer(layers.Layer):
         elif self.initialization == 'relu':
             InitAsRelu(self, noted_bounds)
         elif self.initialization != 'random':
-                print('ActivationLinearizer: initializer not implemented, defaulting to random')    
+            print('ActivationLinearizer: initializer not implemented, defaulting to random')    
     
     def call(self, inputs):
         sum = LinearBounds.OuterBound(self, inputs, paramIndex=[0, 1], boundIndex=0) 
