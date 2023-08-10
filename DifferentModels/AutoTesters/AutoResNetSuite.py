@@ -17,7 +17,7 @@ fileHandle.setFormatter(formatter)
 logger.addHandler(fileHandle)
 
 TOTAL_EPOCHS = 5
-BATCH_SIZE = 64
+BATCH_SIZE = 16
 IMAGE_SIZE = (224, 224, 3)
 AUGMENT_DATA = True
 CONCATENATE_AUGMENT = False
@@ -323,7 +323,7 @@ buildables = [
         "lyr_indices": [22, 24],
         "lyr_replacement": II.PiecewiseLinearUnitV1,
         "args_lyr": [],
-        "kwargs_lyr": [],
+        "kwargs_lyr": {},
         "kwarg_indices": [],
     },
 
@@ -346,7 +346,7 @@ buildables = [
         "lyr_indices": [2, 22, 24],
         "lyr_replacement": II.PiecewiseLinearUnitV1,
         "args_lyr": [],
-        "kwargs_lyr": [],
+        "kwargs_lyr": {},
         "kwarg_indices": [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18],
         "kwarg_replacement": {"activation_1": II.PiecewiseLinearUnitV1(), "activation_2": II.PiecewiseLinearUnitV1(), "activation_3": II.PiecewiseLinearUnitV1()},
     },
@@ -356,7 +356,7 @@ buildables = [
         "lyr_indices": [22, 24],
         "lyr_replacement": II.ActivationLinearizer,
         "args_lyr": ["relu"],
-        "kwargs_lyr": [],
+        "kwargs_lyr": {},
         "kwarg_indices": [],
     },
 
@@ -379,7 +379,7 @@ buildables = [
         "lyr_indices": [2, 22, 24],
         "lyr_replacement": II.ActivationLinearizer,
         "args_lyr": ["relu"],
-        "kwargs_lyr": [],
+        "kwargs_lyr": {},
         "kwarg_indices": [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18],
         "kwarg_replacement": {"activation_1": II.ActivationLinearizer("relu"), "activation_2": II.ActivationLinearizer("relu"), "activation_3": II.ActivationLinearizer("relu")},
     },
@@ -422,7 +422,7 @@ for i in range(len(models_to_test)-start_at):
     model = models_to_test[i+start_at]
     print("\tTraining " + model.name)
     fit_then = time.time()
-    fit_data = model.fit(train_data, epochs=TOTAL_EPOCHS, verbose=2, validation_data=val_data, callbacks=cllbcks_to_use)
+    fit_data = model.fit(train_data, epochs=TOTAL_EPOCHS, verbose=1, validation_data=val_data, callbacks=cllbcks_to_use)
     fit_time = time.time() - fit_then
 
     print("\n\t\tEvaluating " + model.name)
@@ -465,6 +465,6 @@ for i in range(len(models_to_test)-start_at):
     final_log_info += "\n\tWorst Epoch was (" + str(WorsEpoch+1) + ") w/ Top 5: " + str(fit_data.history["val_T5"][WorsEpoch]) + ", Top 3: " + str(fit_data.history["val_T3"][WorsEpoch]) + ", Top 1: "  + str(fit_data.history["val_T1"][WorsEpoch])
     final_log_info += "\n\tTraining Time was: " + str(int(fit_time)) + "s, Evaluation Time was: " + str(int(eval_time)) + "s"
     final_log_info += "\n\tFinal Loss Train: " + str(fit_data.history["loss"][-1]) + ", Val:" + str(fit_data.history["val_loss"][-1])
-    final_log_info += "\n\tFinal Training T5: " + str(fit_data.history["T5"]) + "; T3: " + str(fit_data.history["T3"]) + "; T1: " + str(fit_data.history["T1"])
+    final_log_info += "\n\tFinal Training T5: " + str(fit_data.history["T5"][-1]) + "; T3: " + str(fit_data.history["T3"][-1]) + "; T1: " + str(fit_data.history["T1"][-1])
     final_log_info += "\n"
     logger.info(final_log_info)
