@@ -3,7 +3,7 @@ import math
 from tensorflow.keras.utils import Sequence
 from numpy.lib.stride_tricks import as_strided
 
-#Copied directly from https://github.com/zpzim/LAMP-ICDM2019
+#Copied directly from https://github.com/zpzim/LAMP-ICDM2019 with minor changes afterwards
 class MPTimeseriesGenerator(Sequence):
 
     """Utility class for generating batches of temporal data.
@@ -154,8 +154,8 @@ class MPTimeseriesGenerator(Sequence):
                 # Extract the subsequences
                 samples[j,:,i,:] = self.subsequences(self.data[row - self.lookbehind:row+self.lookahead+self.sublen, i],self.sublen,self.internal_stride, self.num_steps)
                 # Z-normalize the subsequences
-                mu = np.mean(samples[j, :, i, -self.mp_window:], axis=1)
-                sigma = np.std(samples[j, :, i, -self.mp_window:], axis=1)
+                mu = np.mean(samples[j, :, i, -1*self.mp_window:], axis=1)
+                sigma = np.std(samples[j, :, i, -1*self.mp_window:], axis=1)
                 
                 #if np.any(np.isnan(mu)): raise ValueError("mu got nan?")
                 #if np.any(np.isnan(sigma)): raise ValueError("sigma got nan?")

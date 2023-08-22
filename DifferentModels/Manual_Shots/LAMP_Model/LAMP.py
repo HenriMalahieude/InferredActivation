@@ -8,7 +8,7 @@ from keras import models, layers
 
 #2023 Rendition of https://github.com/zpzim/LAMP-ICDM2019
 
-BATCH_SIZE = 32
+BATCH_SIZE = 256
 AMOUNT_OF_INPUT_STREAMS = 1
 
 WINDOW_SIZE = 16
@@ -17,7 +17,7 @@ LOOK_BEHIND = 5
 
 OUTPUT_SIZE = 256
 INPUT_SIZE = (WINDOW_SIZE, AMOUNT_OF_INPUT_STREAMS, OUTPUT_SIZE + (LOOK_BEHIND + LOOK_AHEAD))
-DATASET_PATH = "LAMP_Datasets/StreetMallTraining.mat"
+DATASET_PATH = "LAMP_Datasets/LCCB_dataset.mat"
 
 print('Starting LAMP Sandbox with stats:')
 print("\tBatch Size: {}\n\tMP_Window Size: {}\n\t\tLook Ahead: {}\n\t\tLook Behind: {}".format(BATCH_SIZE, WINDOW_SIZE, LOOK_AHEAD, LOOK_BEHIND))
@@ -45,15 +45,17 @@ if np.any(np.isnan(mp_val)):
 
 if np.any(np.isnan(ts_val)):
     raise ValueError("TS_VAL is NaN")
-"""
 
 print("\tNo NaN in Train/Validation Data")
+"""
+
 #Processed Generators
-train_data = MPTimeseriesGenerator(ts, mp, WINDOW_SIZE, 
+train_data = MPTimeseriesGenerator(ts, mp, 
                                    batch_size=BATCH_SIZE, mp_window=WINDOW_SIZE, num_outputs=OUTPUT_SIZE, lookahead=(LOOK_AHEAD + OUTPUT_SIZE), lookbehind=LOOK_BEHIND, num_input_timeseries=AMOUNT_OF_INPUT_STREAMS)
-val_data = MPTimeseriesGenerator(ts_val, mp_val, WINDOW_SIZE, 
+val_data = MPTimeseriesGenerator(ts_val, mp_val,
                                  batch_size=BATCH_SIZE, mp_window=WINDOW_SIZE, num_outputs=OUTPUT_SIZE, lookahead=(LOOK_AHEAD + OUTPUT_SIZE), lookbehind=LOOK_BEHIND, num_input_timeseries=AMOUNT_OF_INPUT_STREAMS)
 
+"""
 nan_batch = 0
 nan_count = []
 for x, y in train_data:
@@ -66,6 +68,7 @@ if len(nan_count) > 0:
     print("Nan Batches ({}): ".format(nan_batch))
     print(nan_count)
     raise ValueError("Nans in Training")
+"""
 
 print("\nInitializing Building Block")
 class LAMP_ResNetBlock(layers.Layer):
@@ -77,11 +80,11 @@ class LAMP_ResNetBlock(layers.Layer):
         self.conv_pass = models.Sequential([
             layers.Conv2D(self.feature_maps, (8,1), padding='same'),
             layers.BatchNormalization(),
-            layers.Activation('relu'),
+            II.PiecewiseLinearUnitV1(),#layers.Activation('relu'),
 
             layers.Conv2D(self.feature_maps, (5,1), padding='same'),
             layers.BatchNormalization(),
-            layers.Activation('relu'),
+            II.PiecewiseLinearUnitV1(),#layers.Activation('relu'),
 
             layers.Conv2D(self.feature_maps, (3,1), padding='same'),
             layers.BatchNormalization(),
@@ -96,7 +99,7 @@ class LAMP_ResNetBlock(layers.Layer):
         else:
             self.shortcut_pass = layers.BatchNormalization()
 
-        self.final_pass = layers.Activation('relu')
+        self.final_pass = II.PiecewiseLinearUnitV1()#layers.Activation('relu')
         
     
     def call(self, input):
@@ -118,7 +121,7 @@ with strat.scope():
 
         layers.Flatten(),
         layers.Dense(OUTPUT_SIZE),
-        layers.Activation('sigmoid'), #layers.Activation("tanh") as recommended
+        II.PiecewiseLinearUnitV1(),#layers.Activation('sigmoid'), #layers.Activation("tanh") as recommended
         layers.Reshape((OUTPUT_SIZE, 1)),
     ])
 
@@ -128,12 +131,22 @@ with strat.scope():
 
 #"""
 print("\nTraining model")
-LAMP_Model.compile(optimizer='adam', loss='mse', metrics=["accuracy"])
-LAMP_Model.fit(train_data, epochs=5, validation_data=val_data)
+LAMP_Model.compile(optimizer='adam', loss='mse')
+LAMP_Model.fit(train_data, epochs=3, validation_data=val_data)
 
-print("\n")
+"""print("\n")
 
 then = time.time()
 LAMP_Model.evaluate(val_data)
-print("Took: {}ms".format(int((time.time() - then) * 1000)))
+print("Took: {}ms".format(int((time.time() - then) * 1000)))"""
 #"""
+
+#3 Epochs, single top change
+#Control Sigmoid       T-Loss: 0.0026, V-Loss: 0.0040
+#Control Tanh          T-Loss: 0.0026, V-Loss: 0.0050
+
+#Piecewise Linear Unit T-Loss: 0.0025, V-Loss: 0.0041
+#Activation Linearizer T-Loss: 0.2038, V-Loss: 0.1810
+
+#Fully PLU             T-Loss: 0.0025, V-Loss: 0.0049
+#Fully AL              T-Loss: 0.2235, V-Loss: 0.4191 (Best was 0.1225, 0.1179)
