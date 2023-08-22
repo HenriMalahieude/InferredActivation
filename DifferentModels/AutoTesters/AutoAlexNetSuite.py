@@ -17,11 +17,11 @@ fileHandle.setFormatter(formatter)
 logger.addHandler(fileHandle)
 
 TOTAL_EPOCHS = 50
-BATCH_SIZE = 32
+BATCH_SIZE = 64
 IMAGE_SIZE = (227, 227, 3)
 DROPOUT_RATE = 0.5
 AUGMENT_DATA = True
-CONCATENATE_AUGMENT = True
+CONCATENATE_AUGMENT = False
 
 print("Starting AlexNet Auto Tester")
 print("\t{} Epochs\n\tBatched in {}\n\tDropout Rate of {}".format(TOTAL_EPOCHS, BATCH_SIZE, DROPOUT_RATE))
@@ -34,9 +34,10 @@ resize_and_rescale = tf.keras.models.Sequential([
 ])
 
 data_augmentation = tf.keras.models.Sequential([
-    layers.Resizing(IMAGE_SIZE[0]*3, IMAGE_SIZE[1]*3),
-    layers.RandomCrop(IMAGE_SIZE[0]*2, IMAGE_SIZE[0]*2),
+    layers.RandomCrop(IMAGE_SIZE[0], IMAGE_SIZE[0]),
     layers.RandomFlip(),
+    layers.RandomBrightness(factor=0.25),
+    layers.RandomContrast(factor=0.25),
     resize_and_rescale
 ])
 
@@ -87,14 +88,14 @@ basic_alex_net_definition = [
     {
         "lyrFn": layers.AveragePooling2D,
         "args": [],
-        "kwargs": {"pool_size": (3, 3), "strides": (2,2)}
+        "kwargs": {"pool_size": (3, 3), "strides": (2, 2)}
     },
 
     #3
     {
         "lyrFn": layers.Conv2D,
         "args": [256, 5],
-        "kwargs": {"padding":'same'}
+        "kwargs": {"padding": 'same'}
     },
 
     #4
@@ -108,14 +109,14 @@ basic_alex_net_definition = [
     {
         "lyrFn": layers.AveragePooling2D,
         "args": [],
-        "kwargs": {"pool_size": (3, 3), "strides": (2,2)}
+        "kwargs": {"pool_size": (3, 3), "strides": (2, 2)}
     },
 
     #6
     {
         "lyrFn": layers.Conv2D,
         "args": [384, 3],
-        "kwargs": {"padding":'same'}
+        "kwargs": {"padding": 'same'}
     },
 
     #7
@@ -129,7 +130,7 @@ basic_alex_net_definition = [
     {
         "lyrFn": layers.Conv2D,
         "args": [384, 3],
-        "kwargs": {"padding":'same'}
+        "kwargs": {"padding": 'same'}
     },
 
     #9
@@ -142,8 +143,8 @@ basic_alex_net_definition = [
     #10
     {
         "lyrFn": layers.Conv2D,
-        "args": [384, 3],
-        "kwargs": {"padding":'same'}
+        "args": [256, 3],
+        "kwargs": {"padding": 'same'}
     },
 
     #11
@@ -157,7 +158,7 @@ basic_alex_net_definition = [
     {
         "lyrFn": layers.AveragePooling2D,
         "args": [],
-        "kwargs": {"pool_size": (3, 3), "strides": (2,2)}
+        "kwargs": {"pool_size": (3, 3), "strides": (2, 2)}
     },
 
     #13
@@ -212,20 +213,79 @@ basic_alex_net_definition = [
     #20
     {
         "lyrFn": layers.Dense,
-        "args": [10],
+        "args": [1000],
         "kwargs": {}
     },
 
     #21
     {
         "lyrFn": layers.Activation,
-        "args": ["softmax"],
+        "args": ["relu"],
+        "kwargs": {}
+    },
+
+    #22
+    {
+        "lyrFn": layers.Dense,
+        "args": [10],
+        "kwargs": {}
+    },
+
+    #23
+    {
+        "lyrFn": layers.Activation,
+        "args": ['softmax'],
         "kwargs": {}
     },
 ]
 
-replaceable_activations_1 = [1, 4, 7, 9, 11, 15, 18] #Normal relu type beat
-replaceable_activations_2 = [21] #Softmax type beat
+replaceable_activations_1 = [1, 4, 7, 9, 11, 15, 18, 21] #Normal relu type beat
+replaceable_activations_2 = [23] #Softmax type beat
+
+buildables = [
+    {
+        "name": "Control-Alex",
+        "replacement": layers.Activation,
+        "args": ['relu'],
+        "indices_of": []
+    },
+    {
+        "name": "FullPLU-Alex",
+        "replacement": II.PiecewiseLinearUnitV1,
+        "args": [],
+        "indices_of": [1, 4, 7, 9, 11, 15, 18, 21]
+    },
+    {
+        "name": "HalfBotPLU-Alex",
+        "replacement": II.PiecewiseLinearUnitV1,
+        "args": [],
+        "indices_of": [1, 4, 7, 9]
+    },
+    {
+        "name": "HalfTopPLU-Alex",
+        "replacement": II.PiecewiseLinearUnitV1,
+        "args": [],
+        "indices_of": [11, 15, 18, 21]
+    },
+    {
+        "name": "FullAL-Alex",
+        "replacement": II.ActivationLinearizer,
+        "args": ['relu'],
+        "indices_of": [1, 4, 7, 9, 11, 15, 18, 21]
+    },
+    {
+        "name": "HalfBotAL-Alex",
+        "replacement": II.ActivationLinearizer,
+        "args": ['relu'],
+        "indices_of": [1, 4, 7, 9]
+    },
+    {
+        "name": "HalfTopAL-Alex",
+        "replacement": II.ActivationLinearizer,
+        "args": ['relu'],
+        "indices_of": [11, 15, 18, 21],
+    },
+]
 
 print("\nEstablishing Multi-GPU Target")
 strat = tf.distribute.MirroredStrategy()
@@ -235,51 +295,6 @@ print("\nBuilding AlexNet Models")
 with strat.scope():
     metrics_to_use = [TopKCategoricalAccuracy(name="T5"), TopKCategoricalAccuracy(k=3, name="T3"), TopKCategoricalAccuracy(k=1, name="T1")]
     cllbcks_to_use = [tf.keras.callbacks.TerminateOnNaN()]
-
-    buildables = [
-        {
-            "name": "Control-Alex",
-            "replacement": layers.Activation,
-            "args": ['relu'],
-            "indices_of": []
-        },
-        {
-            "name": "FullPLU-Alex",
-            "replacement": II.PiecewiseLinearUnitV1,
-            "args": [],
-            "indices_of": [1, 4, 7, 9, 11, 15, 18]
-        },
-        {
-            "name": "HalfBotPLU-Alex",
-            "replacement": II.PiecewiseLinearUnitV1,
-            "args": [],
-            "indices_of": [1, 4, 7, 9]
-        },
-        {
-            "name": "HalfTopPLU-Alex",
-            "replacement": II.PiecewiseLinearUnitV1,
-            "args": [],
-            "indices_of": [9, 11, 15, 18]
-        },
-        {
-            "name": "FullAL-Alex",
-            "replacement": II.ActivationLinearizer,
-            "args": ['relu'],
-            "indices_of": [1, 4, 7, 9, 11, 15, 18]
-        },
-        {
-            "name": "HalfBotAL-Alex",
-            "replacement": II.ActivationLinearizer,
-            "args": ['relu'],
-            "indices_of": [1, 4, 7, 9]
-        },
-        {
-            "name": "HalfTopAL-Alex",
-            "replacement": II.ActivationLinearizer,
-            "args": ['relu'],
-            "indices_of": [9, 11, 15, 18],
-        },
-    ]
 
     models_to_test = []
     for k in buildables:
@@ -300,7 +315,7 @@ with strat.scope():
         models_to_test.append(new_model)
 
 print("\nBeginning Testing Suite")
-start_at = 2
+start_at = 0
 for i in range(len(models_to_test)-start_at):
     model = models_to_test[i+start_at]
     print("\tTraining " + model.name)
