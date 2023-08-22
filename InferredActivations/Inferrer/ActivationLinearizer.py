@@ -7,7 +7,7 @@ from keras import layers
 @tf.keras.saving.register_keras_serializable('InferredActivation')
 class ActivationLinearizer(layers.Layer):
     def __init__(self, 
-                 initial_eq: str = None, #'random' ; 'sigmoid' ; 'tanh' ; 'gelu'
+                 initial_eq: str = None, #'random' ; 'sigmoid' ; 'tanh' ; 'gelu' ; 'exp' ; 'relu'
                  divisions=6, #including outer bounds
                  left_bound=-6,
                  right_bound=6,
@@ -19,7 +19,7 @@ class ActivationLinearizer(layers.Layer):
 
         self.pw_count = max(divisions, 2) #why would we ever want to make this less than 2?
         self.center_offset = center_offset
-        self.initialization = initial_eq if initial_eq != None else 'sigmoid'
+        self.initialization = initial_eq if initial_eq != None else 'relu'
         self.maximum_interval_length = max(abs(interval_length), 0.1)
         self.left_bound = left_bound
         self.right_bound = right_bound
