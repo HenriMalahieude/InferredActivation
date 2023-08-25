@@ -29,7 +29,7 @@ val_data = val_ds.map(preprocess1)
 data_augmentation = tf.keras.models.Sequential([
     #layers.RandomZoom((-0.5, -0.25), (-0.5, -0.25)),
     layers.RandomCrop(IMAGE_SIZE[0], IMAGE_SIZE[1]),
-    layers.RandomFlip(),
+    #layers.RandomFlip(),
     layers.RandomContrast(factor=0.25),
     layers.RandomBrightness(factor=0.25),
     layers.Rescaling(1./255),
@@ -57,32 +57,32 @@ print("\tNumber of Devices: {}".format(strat.num_replicas_in_sync))
 with strat.scope():
     alex_net = tf.keras.models.Sequential()
     alex_net.add(tf.keras.layers.Conv2D(96, 11, strides=(4, 4), input_shape=IMAGE_SIZE))
-    alex_net.add(II.ActivationLinearizer())#tf.keras.layers.Activation('relu'))
+    alex_net.add(tf.keras.layers.Activation('relu'))
     alex_net.add(tf.keras.layers.AveragePooling2D(pool_size=(3, 3), strides=(2, 2)))
 
     alex_net.add(tf.keras.layers.Conv2D(256, 5, padding='same'))
-    alex_net.add(II.ActivationLinearizer())#tf.keras.layers.Activation('relu'))
+    alex_net.add(tf.keras.layers.Activation('relu'))
     alex_net.add(tf.keras.layers.AveragePooling2D(pool_size=(3, 3), strides=(2, 2)))
 
     alex_net.add(tf.keras.layers.Conv2D(384, 3, padding='same'))
-    alex_net.add(II.ActivationLinearizer())#tf.keras.layers.Activation('relu'))
+    alex_net.add(tf.keras.layers.Activation('relu'))
     alex_net.add(tf.keras.layers.Conv2D(384, 3, padding='same'))
-    alex_net.add(II.ActivationLinearizer())#tf.keras.layers.Activation('relu'))
+    alex_net.add(tf.keras.layers.Activation('relu'))
     alex_net.add(tf.keras.layers.Conv2D(256, 3, padding='same'))
-    alex_net.add(II.ActivationLinearizer())#tf.keras.layers.Activation('relu'))
+    alex_net.add(tf.keras.layers.Activation('relu'))
     alex_net.add(tf.keras.layers.AveragePooling2D(pool_size=(3, 3), strides=(2,2)))
     alex_net.add(tf.keras.layers.Flatten())
 
     alex_net.add(tf.keras.layers.Dense(4096))
-    alex_net.add(II.ActivationLinearizer())#tf.keras.layers.Activation('relu'))
+    alex_net.add(tf.keras.layers.Activation('relu'))
     alex_net.add(tf.keras.layers.Dropout(DROPOUT_RATE))
 
     alex_net.add(tf.keras.layers.Dense(4096))
-    alex_net.add(II.ActivationLinearizer())#tf.keras.layers.Activation('relu'))
+    alex_net.add(tf.keras.layers.Activation('relu'))
     alex_net.add(tf.keras.layers.Dropout(DROPOUT_RATE))
 
     alex_net.add(tf.keras.layers.Dense(1000))
-    alex_net.add(II.ActivationLinearizer())#tf.keras.layers.Activation('relu'))
+    alex_net.add(tf.keras.layers.Activation('relu'))
 
     alex_net.add(tf.keras.layers.Dense(10)) #Number of Classes in our thing
     alex_net.add(tf.keras.layers.Activation('softmax'))
@@ -93,12 +93,11 @@ with strat.scope():
         tf.keras.metrics.TopKCategoricalAccuracy(name='T1', k=1)
     ]
 
-
 #alex_net.summary(line_length=100)
 
 print("\nTraining Model w/ {} of Dropout".format(DROPOUT_RATE))
 alex_net.compile(optimizer='adam', loss=tf.keras.losses.SparseCategoricalCrossentropy(), metrics=metrics_to_use)
-alex_net.fit(x=train_data, epochs=50, validation_data=val_data)
+alex_net.fit(x=train_data, epochs=10, validation_data=val_data)
 
 print("\n")
 
@@ -144,8 +143,9 @@ print("\n")
 
 #------------------------------------------Long Test of 50 Epochs
 #NOTE: For this control, T1 is actually T2 v
-#            (T5) (T3) (T1)   (TL)    (V5) (V3) (V1)   (VL)     (BE) (V5) (V3) (V1)   (VL)
+#            (T5) (T3) (T2)   (TL)    (V5) (V3) (V2)   (VL)     (BE) (V5) (V3) (V2)   (VL)
 #Control ->  100% 100% 090% - 2.302 | 100% 100% 100% - 2.304 || (13) 100% 100% 100% - 2.304 (NOTE: All Top 1 accuracies were 0% on second test)
 
+#            (T5) (T3) (T1)   (TL)    (V5) (V3) (V1)   (VL)     (BE) (V5) (V3) (V1)   (VL)
 #All PLUs->  088% 050% 006% - 2.302 | 100% 000% 000% - 2.304 || (13) 100% 100% 099% - 2.303
 #All ALs ->  100% 100% 000% - 2.302 | 100% 100% 000% - 2.304 || (11) 100% 100% 000% - 2.305
