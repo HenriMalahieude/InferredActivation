@@ -10,12 +10,18 @@ DROPOUT_RATE = 0.5
 AUGMENT_DATA = True
 CONCATENATE_AUGMENT = True
 
+TEACHER_EPOCHS = 6
+STUDENT_EPOCHS = 4
+INDEPENDENT_EPOCHS = 2
+
+TEMP = 5
+
 DISTILL_KWARGS = {
     "optimizer": "adam",
     "student_loss_fn": tf.keras.losses.MeanSquaredError(reduction=tf.keras.losses.Reduction.SUM),
     "distillation_loss_fn": tf.keras.losses.KLDivergence(reduction=tf.keras.losses.Reduction.SUM),
-    "alpha": 0.1,
-    "temperature": 5,
+    "alpha": 0, #Don't mess with this, this makes sure that the student loss function isn't used
+    "temperature": TEMP,
 }
 
 print("Incremental Knowledge Distillation for AlexNet")
@@ -112,14 +118,14 @@ with strat.scope():
 
 print('\tTraining Teacher')
 teacher_base.compile(optimizer="adam", loss=tf.keras.losses.SparseCategoricalCrossentropy(), metrics=metrics_to_use)
-teacher_base.fit(train_data, epochs=4, validation_data=val_data)
+teacher_base.fit(train_data, epochs=TEACHER_EPOCHS, validation_data=val_data)
 
 print("\nCreating Teacher and Student Squad")
 with strat.scope():
     teacher_base.pop() #Remove Softmax layer
     teacher_top = models.clone_model(teacher_base)
 
-    for i in range(9):
+    for i in range(10):
         teacher_base.pop()
 
     teacher_middle = models.clone_model(teacher_base)
@@ -140,33 +146,48 @@ with strat.scope():
         layers.AveragePooling2D(pool_size=(3, 3), strides=(2, 2)),
     ])
 
+    #student_one.summary()
+    #teacher_bottom.summary()
+
     print("\tBuilding Second Stage")
     student_two = models.Sequential([
         student_one,
 
         layers.Conv2D(384, 3, padding='same'),
         II.ActivationLinearizer(),
+
         layers.Conv2D(384, 3, padding='same'),
         II.ActivationLinearizer(),
+
         layers.Conv2D(256, 3, padding='same'),
         II.ActivationLinearizer(),
         layers.AveragePooling2D(pool_size=(3, 3), strides=(2, 2))
     ])
+
+    #student_two.summary()
+    #teacher_middle.summary()
     
     print("\tBuilding Third Stage")
     student_three = models.Sequential([
         student_two,
 
+        layers.Flatten(),
         layers.Dense(4096),
         II.ActivationLinearizer(),
+
         layers.Dropout(DROPOUT_RATE),
         layers.Dense(4096),
         II.ActivationLinearizer(),
+
         layers.Dropout(DROPOUT_RATE),
         layers.Dense(1000),
         II.ActivationLinearizer(),
+
         layers.Dense(10)
     ])
+
+    #student_three.summary()
+    #teacher_top.summary()
 
     stage_one = Distiller(student=student_one, teacher=teacher_bottom)
     stage_one.compile(metrics=[], **DISTILL_KWARGS)
@@ -176,27 +197,27 @@ with strat.scope():
 
     stage_three = Distiller(student=student_three, teacher=teacher_top)
     stage_three.compile(
-        metrics=[], 
+        metrics=metrics_to_use, 
         optimizer="adam", 
         student_loss_fn=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True, reduction=tf.keras.losses.Reduction.SUM),
         distillation_loss_fn=tf.keras.losses.KLDivergence(reduction=tf.keras.losses.Reduction.SUM),
         alpha = 0.1,
-        temperature=5
+        temperature=TEMP
     )
 
 print("\nTraining First Stage of Student")
-stage_one.fit(train_data, epochs=4)
+stage_one.fit(train_data, epochs=STUDENT_EPOCHS)
 #stage_one.evaluate(val_data)
 
 print("\nTraining Second Stage of Student")
-stage_two.fit(train_data, epochs=4)
+stage_two.fit(train_data, epochs=STUDENT_EPOCHS)
 #stage_two.evaluate(val_data)
 
 print("\nTraining Third Stage of Student")
-stage_three.fit(train_data, epochs=4)
-stage_three.evaluate()
+stage_three.fit(train_data, epochs=STUDENT_EPOCHS)
+stage_three.evaluate(val_data)
 
 print("\nIndependent Training")
 student_three.add(layers.Activation("softmax"))
 student_three.compile(optimizer="adam", loss=tf.keras.losses.SparseCategoricalCrossentropy(), metrics=metrics_to_use)
-student_three.fit(train_data, epochs=2, validation_data=val_data)
+student_three.fit(train_data, epochs=INDEPENDENT_EPOCHS, validation_data=val_data)

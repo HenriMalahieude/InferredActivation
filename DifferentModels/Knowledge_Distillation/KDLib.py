@@ -23,11 +23,11 @@ class Distiller(Model):
         with tf.GradientTape() as tape:
             student_predictions = self.student(x, training=True)
 
-            if y.shape == student_predictions.shape:
+            if self.alpha > 0:
                 student_loss = self.student_loss_fn(y, student_predictions)
             else:
                 student_loss = 0
-                self.alpha = 0
+                
 
             distillation_loss = (self.distillation_loss_fn(
                     tf.nn.softmax(teacher_predictions / self.temperature, axis=1), 
