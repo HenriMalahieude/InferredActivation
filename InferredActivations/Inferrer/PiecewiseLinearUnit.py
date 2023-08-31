@@ -10,6 +10,7 @@ from keras import layers#, initializers
 
 	def __call__(self, shape, dtype=None, **kwargs):"""
 
+#OG Paper: https://arxiv.org/abs/2104.03693
 #Referenced: https://github.com/MrGoriay/pwlu-pytorch/blob/main/PWLA.py
 @tf.keras.saving.register_keras_serializable('InferredActivation')
 class PiecewiseLinearUnitV1(layers.Layer):
@@ -32,7 +33,6 @@ class PiecewiseLinearUnitV1(layers.Layer):
 			"running_avg": self.running_avg,
 			"running_std": self.running_std,
 			"momentum": self.momentum,
-			"collect_stats": self.collect_stats
 		}
 		return {**base_config, **config}
 
@@ -41,7 +41,7 @@ class PiecewiseLinearUnitV1(layers.Layer):
 		lyr = PiecewiseLinearUnitV1(config["max_n"], config["N_start"], config["momentum"])
 		lyr.running_avg = config["running_avg"]
 		lyr.running_std = config["running_std"]
-		lyr.collect_stats = config["collect_stats"]
+		lyr.collect_stats = False
 		return lyr
 
 	def build(self, input_shape):
