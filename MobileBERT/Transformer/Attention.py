@@ -1,7 +1,7 @@
 import tensorflow as tf
 import numpy as np
 
-import Linear
+from keras import layers
 
 #A lot of help from Andrej Karpathy's GPT video: https://www.youtube.com/watch?v=kCc8FmEb1nY
 
@@ -9,7 +9,7 @@ class SingleHeadAttention(tf.keras.layers.Layer):
     def __init__(self, 
                  encoder: bool = False, #either encode (make text) or decode (understand text)
                  head_size: int = 16,
-                 softmax_replacement: function = tf.nn.softmax 
+                 softmax_replacement = tf.nn.softmax 
                 ):
         super(SingleHeadAttention, self).__init__()
         self.encoder = encoder
@@ -24,15 +24,15 @@ class SingleHeadAttention(tf.keras.layers.Layer):
         self.inv_tril_inf = inv_tril * float('-inf')
 
         #Key: I am this token
-        self.key = Linear.Linear(self.head_size, bias=False) 
+        self.key = layers.Dense(self.head_size, bias=False) 
         self.key.build(input_shape)
 
         #Query: I am looking for this type of token
-        self.query = Linear.Linear(self.head_size, bias=False) 
+        self.query = layers.Dense(self.head_size, bias=False) 
         self.query.build(input_shape)
 
         #Value: What token this head will mask/focus on
-        self.value = Linear.Linear(self.head_size, bias=False)
+        self.value = layers.Dense(self.head_size, bias=False)
         self.value.build(input_shape)
         #super(SingleHeadAttention, self).build(input_shape)
 
@@ -59,7 +59,7 @@ class MultiHeadAttention(tf.keras.layers.Layer):
                  encoder = False,
                  head_count: int = 3,
                  head_size: int = 16,
-                 softmax_replacement:function = tf.nn.softmax
+                 softmax_replacement = tf.nn.softmax
                  ):
         super(MultiHeadAttention, self).__init__()
 

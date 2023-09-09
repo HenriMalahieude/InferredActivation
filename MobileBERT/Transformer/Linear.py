@@ -1,5 +1,6 @@
 import tensorflow as tf
 
+#I didn't realize that keras.layers.Dense was actually the Linear thing
 class Linear(tf.keras.layers.Layer): #Implementation of PyTorch Linear, hopefully keras handles the device stuff
     def __init__(self, 
                  out_features: int,
