@@ -7,7 +7,7 @@ from keras import layers, models
 #Logging Set up
 logger = logging.getLogger("internal_Logger_wo__imports")
 logger.setLevel(logging.DEBUG)
-fileHandle = logging.FileHandler(filename="alexnet_testing_suite.log")
+fileHandle = logging.FileHandler(filename="alexnet_imagenet_dump.log")
 
 formatter = logging.Formatter(fmt='%(message)s')
 fileHandle.setFormatter(formatter)
@@ -20,10 +20,16 @@ gpu_devices = tf.config.experimental.list_physical_devices('GPU')
 for device in gpu_devices:
     tf.config.experimental.set_memory_growth(device, True)
 
-MAX_EPOCH = 100
-BATCH_SIZE = 512
+MAX_EPOCH = 15
+BATCH_SIZE = 4
+INIT_LRATE = 0.01
+LRATE_EPOCH_DEC = 5
+MOMENTUM = 0.9 #From AlexNet Paper
+WEIGHT_DECAY = 0.0005 #From AlexNet Paper
+
 IMAGE_SIZE = (227, 227, 3)
 DROPOUT_RATE = 0.5
+
 AUGMENT_DATA = True
 CONCATENATE_AUGMENT = False
 AUGMENT_FACTOR = 0.1
@@ -51,7 +57,10 @@ resize_and_rescale = models.Sequential([
 ])
 
 data_augmentation = models.Sequential([
-    layers.RandomZoom((-0.1, -0.5)),
+    layers.Resizing(256, 256),
+    layers.RandomCrop(IMAGE_SIZE[0], IMAGE_SIZE[1]),
+    #layers.RandomZoom((-0.1, -0.5)),
+    layers.RandomFlip("horizontal"),
     layers.RandomContrast(AUGMENT_FACTOR),
     layers.RandomBrightness((-1 * AUGMENT_FACTOR, AUGMENT_FACTOR)),
     resize_and_rescale
@@ -90,63 +99,94 @@ strat = tf.distribute.MirroredStrategy()
 print("\tNumber of Devices: {}".format(strat.num_replicas_in_sync))
 
 with strat.scope():
+    optim = tf.keras.optimizers.AdamW(INIT_LRATE, WEIGHT_DECAY, duse_ema=True, ema_momentum=MOMENTUM)
+
+    inits = {
+        "zero-gaussian" : tf.keras.initializers.RandomNormal(0.0, 0.01, seed=15023), #Not sure this actually a func
+        "const1": tf.keras.initializers.Constant(1),
+        "const0": tf.keras.initializers.Constant(0),
+    }
+    
+    kwargs = [
+        {"kernel_initializer": inits["zero-gaussian"], "bias_initializer": inits["const0"]},
+        {"kernel_initializer": inits["zero-gaussian"], "bias_initializer": inits["const1"]},
+    ]
+
     alex_net = tf.keras.models.Sequential([
-        layers.Conv2D(96, 11, strides=(4, 4), input_shape=IMAGE_SIZE),
+        layers.Conv2D(96, 11, strides=(4, 4), input_shape=IMAGE_SIZE, **kwargs[0]),
         layers.Activation('relu'),
         layers.AveragePooling2D(pool_size=(3, 3), strides=(2,2)),
 
-        layers.Conv2D(256, 5, padding='same'),
+        layers.Conv2D(256, 5, padding='same', **kwargs[1]),
         layers.Activation('relu'),
         layers.AveragePooling2D(pool_size=(3,3), strides=(2,2)),
 
-        layers.Conv2D(384, 3, padding='same'),
+        layers.Conv2D(384, 3, padding='same', **kwargs[1]),
         layers.Activation('relu'),
-        layers.Conv2D(384, 3, padding='same'),
+        layers.Conv2D(384, 3, padding='same', **kwargs[1]),
         layers.Activation('relu'),
-        layers.Conv2D(256, 3, padding='same'),
+        layers.Conv2D(256, 3, padding='same', **kwargs[0]),
         layers.Activation('relu'),
         layers.AveragePooling2D(pool_size=(3, 3), strides=(2,2)),
 
         layers.Flatten(),
-        layers.Dense(4096),
+        layers.Dense(4096, **kwargs[0]),
         layers.Activation('relu'),
         layers.Dropout(DROPOUT_RATE),
 
-        layers.Dense(4096),
+        layers.Dense(4096, **kwargs[0]),
         layers.Activation('relu'),
         layers.Dropout(DROPOUT_RATE),
 
-        layers.Dense(1000),
+        layers.Dense(1000, **kwargs[0]),
         layers.Activation('softmax')
     ])
 
+    def learn_rate_scheduler(epoch, lr):
+        intervals = MAX_EPOCH // LRATE_EPOCH_DEC
+        
+        for i in range(intervals):
+            if ((i+1) * LRATE_EPOCH_DEC) == epoch:
+                return lr / 10
+        
+        return lr
+
     checks_to_use = [
-        tf.keras.callbacks.EarlyStopping(monitor='val_T5', patience=20, mode='max', start_from_epoch=5, verbose=1),
-        tf.keras.callbacks.TerminateOnNaN()
+        #tf.keras.callbacks.EarlyStopping(monitor='val_T5', patience=20, mode='max', start_from_epoch=5, verbose=1),
+        tf.keras.callbacks.TerminateOnNaN(),
+        tf.keras.callbacks.LearningRateScheduler(learn_rate_scheduler, verbose=1)
     ]
 
     metrics_to_use = [
-        tf.keras.metrics.TopKCategoricalAccuracy(name="T5"), 
+        tf.keras.metrics.TopKCategoricalAccuracy(k=500, name="T500"),
+        tf.keras.metrics.TopKCategoricalAccuracy(k=250, name="T250"),
+        tf.keras.metrics.TopKCategoricalAccuracy(k=5, name="T5"), 
         tf.keras.metrics.TopKCategoricalAccuracy(k=3, name="T3"), 
         tf.keras.metrics.TopKCategoricalAccuracy(k=1, name="T1")
     ]
 
 print("\nBeginning Training")
-alex_net.compile(optimizer='adam', loss=tf.keras.losses.SparseCategoricalCrossentropy(), metrics=metrics_to_use)
+alex_net.compile(optimizer=optim, loss=tf.keras.losses.SparseCategoricalCrossentropy(), metrics=metrics_to_use)
 hist = alex_net.fit(train_data, epochs=MAX_EPOCH, validation_data=val_data, callbacks=checks_to_use)
 
 print("\n")
 result = alex_net.evaluate(test_data)
 
-logging.info("Control History: ")
-logging.info("Testing Loss: {}".format(hist.history["loss"]))
-logging.info("Testing T5: {}".format(hist.history["T5"]))
-logging.info("Testing T3: {}".format(hist.history["T3"]))
-logging.info("Testing T1: {}".format(hist.history["T1"]))
+logger.info("Full AL History: ")
+logger.info("Testing Loss: {}".format(hist.history["loss"]))
+logger.info("Testing T500: {}".format(hist.history["T500"]))
+logger.info("Testing T250: {}".format(hist.history["T250"]))
+logger.info("Testing T5: {}".format(hist.history["T5"]))
+logger.info("Testing T3: {}".format(hist.history["T3"]))
+logger.info("Testing T1: {}".format(hist.history["T1"]))
 
-logging.info("Validation Loss: {}".format(hist.history["val_loss"]))
-logging.info("Validation T5: {}".format(hist.history["T5"]))
-logging.info("Validation T3: {}".format(hist.history["T3"]))
-logging.info("Validation T1: {}".format(hist.history["T1"]))
+logger.info("\nValidation Loss: {}".format(hist.history["val_loss"]))
+logger.info("Validation T500: {}".format(hist.history["val_T500"]))
+logger.info("Validation T250: {}".format(hist.history["val_T250"]))
+logger.info("Validation T5: {}".format(hist.history["val_T5"]))
+logger.info("Validation T3: {}".format(hist.history["val_T3"]))
+logger.info("Validation T1: {}".format(hist.history["val_T1"]))
+
+logger.info("\nTest Results: {}".format(result))
 #-------------------------------100 Epochs with 25 Minimum Epochs
 #Control ->
