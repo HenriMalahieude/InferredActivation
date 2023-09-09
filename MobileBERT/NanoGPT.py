@@ -52,13 +52,24 @@ except:
         data_input.append(data_raw[i:index_at])
         data_labels.append(data_raw[index_at])
 
-    print("\t% 100")
+    print("\t% 100  ")
 
     print("Creating Dataset")
     dataset_full = tf.data.Dataset.from_tensor_slices((data_input, data_labels))
-    dataset_full.batch(BATCH_SIZE)
-    dataset_full.prefetch(buffer_size=tf.data.AUTOTUNE)
     tf.data.Dataset.save(dataset_full, "./" + DEFAULT_DATASET_FILENAME)
+
+print("Dataset Element Size: {}".format(dataset_full.cardinality()))
+
+print("Batching and Prefetching Dataset")
+#dataset_full.unbatch()
+dataset_full.batch(BATCH_SIZE, drop_remainder=True)
+dataset_full.prefetch(buffer_size=tf.data.AUTOTUNE)
+
+print("Checking Dataset")
+for x, y in dataset_full:
+    print("\tInput:", x.shape)
+    print("\tOutput:", y.shape)
+    break
 
 print("Defining Transformer Stuff")
 class TransformerBlock(layers.Layer):
@@ -68,7 +79,7 @@ class TransformerBlock(layers.Layer):
         self.sa = MultiHeadAttention(head_count=N_HEAD, head_size=head_size)
 
         self.ffwd = tf.keras.models.Sequential([
-            layers.Dense(4 * N_EMBED, input_shape=N_EMBED),
+            layers.Dense(4 * N_EMBED),
             layers.Activation("relu"), #<-------------------------- Place for approximations
             layers.Dense(N_EMBED),
             layers.Dropout(DROPOUT),
@@ -87,7 +98,7 @@ class BigramLanguageModel(tf.keras.models.Model):
         super(BigramLanguageModel, self).__init__()
         self.token_embedding_table = layers.Embedding(vocab_size, N_EMBED)
         self.position_embedding_table = layers.Embedding(ATTENT_SPAN, N_EMBED)
-        self.blocks = tf.keras.models.Sequential(*[TransformerBlock() for _ in range(N_LAYER)])
+        self.blocks = tf.keras.models.Sequential([*[TransformerBlock() for _ in range(N_LAYER)]])
         self.ln_f = layers.LayerNormalization(N_EMBED) # final layer norm
         self.lm_head = layers.Dense(vocab_size)
 
@@ -95,7 +106,13 @@ class BigramLanguageModel(tf.keras.models.Model):
         self.lm_head.build(N_EMBED)
 
     def call(self, input):
-        B, T = input.shape
+        assert len(input.shape) <= 2
+        assert len(input.shape) > 0
+
+        if len(input.shape) == 2:
+            B, T = input.shape
+        elif len(input.shape) == 1:
+            T = input.shape[0]
 
         tok_emb = self.token_embedding_table(input)
         pos_emb = self.position_embedding_table(np.arange(T))
@@ -126,8 +143,8 @@ class BigramLanguageModel(tf.keras.models.Model):
     
 print("Training")
 model = BigramLanguageModel()
-model.compile(optimizer='adam', loss=tf.keras.losses.Crossentropy())
-model.fit(dataset_full, epochs=10, validation_split=VAL_SPLIT)
+model.compile(optimizer='adam', loss=tf.keras.losses.SparseCategoricalCrossentropy())
+model.fit(dataset_full, epochs=10)
 
 print("Generation")
 context = tf.ones((1,1), dtype=tf.float32)
