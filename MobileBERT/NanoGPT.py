@@ -39,6 +39,7 @@ data_len = len(data_raw) // 4
 data_input = []
 data_labels = []
 
+text = None
 dataset_full = None
 
 try:
@@ -47,12 +48,12 @@ except:
     print("\tFormatting Dataset")
 
     for i in range(data_len - ATTENT_SPAN):
-        print("\t% ", int((i / data_len) * 1000) / 10, end="\r")
+        print("\t% ", int((i / data_len) * 10000) / 100, end="\r")
         index_at = i + ATTENT_SPAN
         data_input.append(data_raw[i:index_at])
         data_labels.append(data_raw[index_at])
 
-    print("\t% 100  ")
+    print("\t% 100    ")
 
     print("Creating Dataset")
     dataset_full = tf.data.Dataset.from_tensor_slices((data_input, data_labels))
@@ -62,8 +63,8 @@ print("Dataset Element Size: {}".format(dataset_full.cardinality()))
 
 print("Batching and Prefetching Dataset")
 #dataset_full.unbatch()
-dataset_full.batch(BATCH_SIZE, drop_remainder=True)
-dataset_full.prefetch(buffer_size=tf.data.AUTOTUNE)
+dataset_full = dataset_full.batch(BATCH_SIZE, drop_remainder=True)
+dataset_full = dataset_full.prefetch(buffer_size=tf.data.AUTOTUNE)
 
 print("Checking Dataset")
 for x, y in dataset_full:
@@ -143,7 +144,7 @@ class BigramLanguageModel(tf.keras.models.Model):
     
 print("Training")
 model = BigramLanguageModel()
-model.compile(optimizer='adam', loss=tf.keras.losses.SparseCategoricalCrossentropy())
+model.compile(optimizer='adam', loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True))
 model.fit(dataset_full, epochs=10)
 
 print("Generation")
