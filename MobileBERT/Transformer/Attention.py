@@ -24,15 +24,15 @@ class SingleHeadAttention(tf.keras.layers.Layer):
         self.inv_tril_inf = inv_tril * float('-inf')
 
         #Key: I am this token
-        self.key = layers.Dense(self.head_size, bias=False) 
+        self.key = layers.Dense(self.head_size, use_bias=False) 
         self.key.build(input_shape)
 
         #Query: I am looking for this type of token
-        self.query = layers.Dense(self.head_size, bias=False) 
+        self.query = layers.Dense(self.head_size, use_bias=False) 
         self.query.build(input_shape)
 
         #Value: What token this head will mask/focus on
-        self.value = layers.Dense(self.head_size, bias=False)
+        self.value = layers.Dense(self.head_size, use_bias=False)
         self.value.build(input_shape)
         #super(SingleHeadAttention, self).build(input_shape)
 
