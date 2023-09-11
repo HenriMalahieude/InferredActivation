@@ -22,7 +22,7 @@ for device in gpu_devices:
 
 MAX_EPOCH = 15
 BATCH_SIZE = 4
-INIT_LRATE = 0.01
+INIT_LRATE = 0.01 #Change this to a little lower so that it doesn't slide past as bad
 LRATE_EPOCH_DEC = 5
 MOMENTUM = 0.9 #From AlexNet Paper
 WEIGHT_DECAY = 0.0005 #From AlexNet Paper
@@ -85,7 +85,7 @@ def prepare_dataset(ds, augment=False):
             print("\t\tReplacing Original with Augment")
             dsn = ds.map(preprocess2, num_parallel_calls=tf.data.AUTOTUNE, deterministic=False)
 
-    dsn.batch(BATCH_SIZE)
+    dsn = dsn.batch(BATCH_SIZE)
 
     print("\tDataset Prepared")
     return dsn.prefetch(buffer_size=tf.data.AUTOTUNE)
@@ -99,7 +99,7 @@ strat = tf.distribute.MirroredStrategy()
 print("\tNumber of Devices: {}".format(strat.num_replicas_in_sync))
 
 with strat.scope():
-    optim = tf.keras.optimizers.AdamW(INIT_LRATE, WEIGHT_DECAY, duse_ema=True, ema_momentum=MOMENTUM)
+    optim = tf.keras.optimizers.AdamW(INIT_LRATE, WEIGHT_DECAY, use_ema=True, ema_momentum=MOMENTUM)
 
     inits = {
         "zero-gaussian" : tf.keras.initializers.RandomNormal(0.0, 0.01, seed=15023), #Not sure this actually a func
@@ -127,7 +127,7 @@ with strat.scope():
         layers.Activation('relu'),
         layers.Conv2D(256, 3, padding='same', **kwargs[0]),
         layers.Activation('relu'),
-        layers.AveragePooling2D(pool_size=(3, 3), strides=(2,2)),
+        layers.AveragePooling2D(pool_size=(3, 3), strides=(2,2)), #Need to change this to Max Pooling for another test
 
         layers.Flatten(),
         layers.Dense(4096, **kwargs[0]),
@@ -172,13 +172,13 @@ hist = alex_net.fit(train_data, epochs=MAX_EPOCH, validation_data=val_data, call
 print("\n")
 result = alex_net.evaluate(test_data)
 
-logger.info("Full AL History: ")
-logger.info("Testing Loss: {}".format(hist.history["loss"]))
-logger.info("Testing T500: {}".format(hist.history["T500"]))
-logger.info("Testing T250: {}".format(hist.history["T250"]))
-logger.info("Testing T5: {}".format(hist.history["T5"]))
-logger.info("Testing T3: {}".format(hist.history["T3"]))
-logger.info("Testing T1: {}".format(hist.history["T1"]))
+logger.info("Training History: ")
+logger.info("Training Loss: {}".format(hist.history["loss"]))
+logger.info("Training T500: {}".format(hist.history["T500"]))
+logger.info("Training T250: {}".format(hist.history["T250"]))
+logger.info("Training T5: {}".format(hist.history["T5"]))
+logger.info("Training T3: {}".format(hist.history["T3"]))
+logger.info("Training T1: {}".format(hist.history["T1"]))
 
 logger.info("\nValidation Loss: {}".format(hist.history["val_loss"]))
 logger.info("Validation T500: {}".format(hist.history["val_T500"]))
