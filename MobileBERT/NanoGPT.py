@@ -7,70 +7,75 @@ import numpy as np
 from Transformer import MultiHeadAttention
 from keras import layers
 
-# hyperparameters
-BATCH_SIZE = 16 # how many independent sequences will we process in parallel?
-ATTENT_SPAN = 32 # what is the maximum context length for predictions?
-VAL_SPLIT=0.1
-N_EMBED = 64
-N_HEAD = 4 #Attention Heads
-N_LAYER = 4
-DROPOUT = 0.0
+# Hyperparameters
+BATCH_SIZE = 16 # How many independent sequences will we process in parallel?
+ATTENT_SPAN = 32 # What is the maximum context length for predictions? (Used to build dataset too)
+VAL_SPLIT=0.1 # How much of the dataset to put to the side for validation
+N_EMBED = 64 
+N_HEAD = 4 # Amount of Attention Heads in Multi-Headed Attention
+N_LAYER = 4 # Amount of Multi-Headed Attention Layers (Transformers)
+DROPOUT = 0.1
 
 DEFAULT_DATASET_FILENAME = "nano_shakespeare_ds"
 # ------------
+print("Starting NanoGPT Sandbox, credit to Andrej Karpathy's video")
 
-#Get Input Data
+print("Opening Shakespeare File")
 with open('shakespeare.txt', 'r', encoding='utf-8') as f:
     text = f.read()
 
 chars = sorted(list(set(text)))
 vocab_size = len(chars)
-print('Characters: ' + ''.join(chars))
-print('Vocab Size: ', vocab_size)
+print('\tCharacters: ' + ''.join(chars))
+print('\tVocab Size: ', vocab_size)
 
 stoi = { ch:i for i,ch in enumerate(chars) }
 itos = { i:ch for i,ch in enumerate(chars) }
 encode = lambda s: [stoi[c] for c in s] # encoder: take a string, output a list of integers
 decode = lambda l: ''.join([itos[i] for i in l]) # decoder: take a list of integers, output a string
 
-print("Prepping Dataset (%)")
-data_raw = tf.constant(encode(text))
-data_len = len(data_raw) // 4
-data_input = []
-data_labels = []
-
-text = None
+print("Prepping Dataset")
 dataset_full = None
 
 try:
+    print("\tAttempting to Open Dataset")
     dataset_full = tf.data.Dataset.load(("./" + DEFAULT_DATASET_FILENAME))
-except:
-    print("\tFormatting Dataset")
 
-    for i in range(data_len - ATTENT_SPAN):
+    print("\tChecking if Loaded Dataset can be used")
+    can_use = True
+
+    for x, y in dataset_full:
+        if x.shape[-1] != ATTENT_SPAN: #Expecting a shape of B, T where T == ATTENT_SPAN
+            raise ValueError("This dataset needs to be reformatted")
+        
+        break
+
+except:
+    print("\tCreating Dataset (nonexistent or incorrect format catch)")
+    data_raw = tf.constant(encode(text))
+    text = None
+    data_len = len(data_raw) // 2
+    data_input = []
+    data_labels = []
+
+    for i in range(data_len - ATTENT_SPAN): #Honestly, I should just load this into a generator function to be real
         print("\t% ", int((i / data_len) * 10000) / 100, end="\r")
         index_at = i + ATTENT_SPAN
         data_input.append(data_raw[i:index_at])
         data_labels.append(data_raw[index_at])
 
-    print("\t% 100    ")
+    print("\t% 100     ")
 
-    print("Creating Dataset")
+    print("\tInstancing Dataset")
     dataset_full = tf.data.Dataset.from_tensor_slices((data_input, data_labels))
+    print("\tSaving Dataset")
     tf.data.Dataset.save(dataset_full, "./" + DEFAULT_DATASET_FILENAME)
-
-print("Dataset Element Size: {}".format(dataset_full.cardinality()))
 
 print("Batching and Prefetching Dataset")
 #dataset_full.unbatch()
 dataset_full = dataset_full.batch(BATCH_SIZE, drop_remainder=True)
 dataset_full = dataset_full.prefetch(buffer_size=tf.data.AUTOTUNE)
-
-print("Checking Dataset")
-for x, y in dataset_full:
-    print("\tInput:", x.shape)
-    print("\tOutput:", y.shape)
-    break
+text = None
 
 print("Defining Transformer Stuff")
 class TransformerBlock(layers.Layer):
@@ -100,31 +105,26 @@ class BigramLanguageModel(tf.keras.models.Model):
         self.token_embedding_table = layers.Embedding(vocab_size, N_EMBED)
         self.position_embedding_table = layers.Embedding(ATTENT_SPAN, N_EMBED)
         self.blocks = tf.keras.models.Sequential([*[TransformerBlock() for _ in range(N_LAYER)]])
-        self.ln_f = layers.LayerNormalization(N_EMBED) # final layer norm
+        self.ln_f = layers.LayerNormalization() # final layer norm
         self.lm_head = layers.Dense(vocab_size)
 
     def build(self, input_shape):
         self.lm_head.build(N_EMBED)
 
-    def call(self, input):
-        assert len(input.shape) <= 2
-        assert len(input.shape) > 0
+    def call(self, input): #Predict something
+        B, T = input.shape
 
-        if len(input.shape) == 2:
-            B, T = input.shape
-        elif len(input.shape) == 1:
-            T = input.shape[0]
+        tok_emb = self.token_embedding_table(input) #(B, T, C)
+        pos_emb = self.position_embedding_table(np.arange(T)) #(T, C)
+        x = tok_emb + pos_emb #(B, T, C)
+        x = self.blocks(x) #(B, T, C)
+        x = self.ln_f(x) #(B, T, C)
+        logits = self.lm_head(x) #(B, T, vocab_size)
 
-        tok_emb = self.token_embedding_table(input)
-        pos_emb = self.position_embedding_table(np.arange(T))
-        x = tok_emb + pos_emb
-        x = self.blocks(x)
-        x = self.ln_f(x)
-        logits = self.lm_head(x)
 
         return logits
 
-    def generate(self, idx, max_new_tokens):
+    def generate(self, idx, max_new_tokens): #Babble for me please
         # idx is (B, T) array of indices in the current context
         for _ in range(max_new_tokens):
             # crop idx to the last block_size tokens
@@ -144,9 +144,9 @@ class BigramLanguageModel(tf.keras.models.Model):
     
 print("Training")
 model = BigramLanguageModel()
-model.compile(optimizer='adam', loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True))
+model.compile(optimizer='adam', loss=tf.keras.losses.BinaryCrossentropy(from_logits=True))
 model.fit(dataset_full, epochs=10)
 
-print("Generation")
+print("Generating")
 context = tf.ones((1,1), dtype=tf.float32)
 print(decode(model.generate(context, max_new_tokens=2000)[0].to_list()))

@@ -72,14 +72,11 @@ class MultiHeadAttention(tf.keras.layers.Layer):
             self.heads[i].build(input_shape)
 
     def call(self, inputs):
-        
         vals = []
         for i in range(len(self.heads)):
-            vals.append(self.heads[i].call(inputs))
-        
-        sum = vals[0]
-        for i in range(len(vals)-1):
-            j = i+1
-            sum += vals[j]
+            val = self.heads[i].call(inputs)
+            vals.append(val)
 
-        return sum
+        final = tf.concat(vals, axis=-1) #So for example 4x (16, 32, 16) turns into (16, 32, 64)
+
+        return final
