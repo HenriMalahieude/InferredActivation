@@ -15,15 +15,16 @@ fileHandle.setFormatter(formatter)
 logger.addHandler(fileHandle)
 
 #Quiets 
-#"2023-07-28 18:38:33.330313: I tensorflow/compiler/xla/stream_executor/cuda/cuda_gpu_executor.cc:996] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355"
+#"2023-07-28 18:38:33.330313: I tensorflow/compiler/xla/stream_executor/cuda/cuda_gpu_executor.cc:996] successful NUMA node read from SysFS had negative value (-1), 
+# but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355"
 gpu_devices = tf.config.experimental.list_physical_devices('GPU')
 for device in gpu_devices:
     tf.config.experimental.set_memory_growth(device, True)
 
 MAX_EPOCH = 15
 BATCH_SIZE = 4
-INIT_LRATE = 0.01 #Change this to a little lower so that it doesn't slide past as bad
-LRATE_EPOCH_DEC = 5
+INIT_LRATE = 0.005 #AlexNet Paper used 0.1 initially, but AL and PLU seem to want something.... smaller
+LRATE_EPOCH_DEC = 4
 MOMENTUM = 0.9 #From AlexNet Paper
 WEIGHT_DECAY = 0.0005 #From AlexNet Paper
 
@@ -102,7 +103,7 @@ with strat.scope():
     optim = tf.keras.optimizers.AdamW(INIT_LRATE, WEIGHT_DECAY, use_ema=True, ema_momentum=MOMENTUM)
 
     inits = {
-        "zero-gaussian" : tf.keras.initializers.RandomNormal(0.0, 0.01, seed=15023), #Not sure this actually a func
+        "zero-gaussian" : tf.keras.initializers.RandomNormal(0.0, 0.01, seed=15023),
         "const1": tf.keras.initializers.Constant(1),
         "const0": tf.keras.initializers.Constant(0),
     }
@@ -115,11 +116,11 @@ with strat.scope():
     alex_net = tf.keras.models.Sequential([
         layers.Conv2D(96, 11, strides=(4, 4), input_shape=IMAGE_SIZE, **kwargs[0]),
         layers.Activation('relu'),
-        layers.AveragePooling2D(pool_size=(3, 3), strides=(2,2)),
+        layers.MaxPooling2D(pool_size=(3, 3), strides=(2,2)),
 
         layers.Conv2D(256, 5, padding='same', **kwargs[1]),
         layers.Activation('relu'),
-        layers.AveragePooling2D(pool_size=(3,3), strides=(2,2)),
+        layers.MaxPooling2D(pool_size=(3,3), strides=(2,2)),
 
         layers.Conv2D(384, 3, padding='same', **kwargs[1]),
         layers.Activation('relu'),
@@ -127,7 +128,7 @@ with strat.scope():
         layers.Activation('relu'),
         layers.Conv2D(256, 3, padding='same', **kwargs[0]),
         layers.Activation('relu'),
-        layers.AveragePooling2D(pool_size=(3, 3), strides=(2,2)), #Need to change this to Max Pooling for another test
+        layers.MaxPooling2D(pool_size=(3, 3), strides=(2,2)), #Need to change this to Max Pooling for another test
 
         layers.Flatten(),
         layers.Dense(4096, **kwargs[0]),
@@ -188,5 +189,3 @@ logger.info("Validation T3: {}".format(hist.history["val_T3"]))
 logger.info("Validation T1: {}".format(hist.history["val_T1"]))
 
 logger.info("\nTest Results: {}".format(result))
-#-------------------------------100 Epochs with 25 Minimum Epochs
-#Control ->
