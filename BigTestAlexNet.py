@@ -24,7 +24,8 @@ for device in gpu_devices:
 MAX_EPOCH = 15
 BATCH_SIZE = 4
 INIT_LRATE = 0.005 #AlexNet Paper used 0.1 initially, but AL and PLU seem to want something.... smaller
-LRATE_EPOCH_DEC = 4
+LRATE_EPOCH_DEC = 3
+LRATE_DECREASE = 0.1 # divide by 10 from AlexNet Paper
 MOMENTUM = 0.9 #From AlexNet Paper
 WEIGHT_DECAY = 0.0005 #From AlexNet Paper
 
@@ -86,7 +87,8 @@ def prepare_dataset(ds, augment=False):
             print("\t\tReplacing Original with Augment")
             dsn = ds.map(preprocess2, num_parallel_calls=tf.data.AUTOTUNE, deterministic=False)
 
-    dsn = dsn.batch(BATCH_SIZE)
+    #dsn = dsn.unbatch()
+    dsn.batch(BATCH_SIZE)
 
     print("\tDataset Prepared")
     return dsn.prefetch(buffer_size=tf.data.AUTOTUNE)
@@ -128,7 +130,7 @@ with strat.scope():
         layers.Activation('relu'),
         layers.Conv2D(256, 3, padding='same', **kwargs[0]),
         layers.Activation('relu'),
-        layers.MaxPooling2D(pool_size=(3, 3), strides=(2,2)), #Need to change this to Max Pooling for another test
+        layers.MaxPooling2D(pool_size=(3, 3), strides=(2,2)),
 
         layers.Flatten(),
         layers.Dense(4096, **kwargs[0]),
@@ -148,7 +150,7 @@ with strat.scope():
         
         for i in range(intervals):
             if ((i+1) * LRATE_EPOCH_DEC) == epoch:
-                return lr / 10
+                return lr * min(max(LRATE_DECREASE, 0), 1)
         
         return lr
 
