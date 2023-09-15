@@ -50,9 +50,9 @@ print("\tNo NaN in Train/Validation Data")
 """
 
 #Processed Generators
-train_data = MPTimeseriesGenerator(ts, mp, 
+train_data = MPTimeseriesGenerator(ts, mp, WINDOW_SIZE,
                                    batch_size=BATCH_SIZE, mp_window=WINDOW_SIZE, num_outputs=OUTPUT_SIZE, lookahead=(LOOK_AHEAD + OUTPUT_SIZE), lookbehind=LOOK_BEHIND, num_input_timeseries=AMOUNT_OF_INPUT_STREAMS)
-val_data = MPTimeseriesGenerator(ts_val, mp_val,
+val_data = MPTimeseriesGenerator(ts_val, mp_val, WINDOW_SIZE,
                                  batch_size=BATCH_SIZE, mp_window=WINDOW_SIZE, num_outputs=OUTPUT_SIZE, lookahead=(LOOK_AHEAD + OUTPUT_SIZE), lookbehind=LOOK_BEHIND, num_input_timeseries=AMOUNT_OF_INPUT_STREAMS)
 
 """
