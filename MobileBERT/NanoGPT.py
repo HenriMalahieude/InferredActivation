@@ -8,7 +8,8 @@ from Transformer import MultiHeadAttention
 from keras import layers
 
 # Hyperparameters
-BATCH_SIZE = 16 # How many independent sequences will we process in parallel?
+EPOCHS = 1 # How many times we cycle through the training data
+BATCH_SIZE = 32 # How many independent sequences will we process in parallel?
 ATTENT_SPAN = 32 # What is the maximum context length for predictions? (Used to build dataset too)
 VAL_SPLIT=0.1 # How much of the dataset to put to the side for validation
 N_EMBED = 64 
@@ -16,7 +17,7 @@ N_HEAD = 4 # Amount of Attention Heads in Multi-Headed Attention
 N_LAYER = 4 # Amount of Multi-Headed Attention Layers (Transformers)
 DROPOUT = 0.1
 
-DEFAULT_DATASET_FILENAME = "nano_shakespeare_ds"
+#DEFAULT_DATASET_FILENAME = "nano_shakespeare_ds"
 # ------------
 print("Starting NanoGPT Sandbox, credit to Andrej Karpathy's video")
 
@@ -39,7 +40,7 @@ dataset_full = None
 
 try:
     print("\tAttempting to Open Dataset")
-    dataset_full = tf.data.Dataset.load(("./" + DEFAULT_DATASET_FILENAME))
+    #dataset_full = tf.data.Dataset.load(("./" + DEFAULT_DATASET_FILENAME))
 
     print("\tChecking if Loaded Dataset can be used")
     can_use = True
@@ -54,7 +55,7 @@ except:
     print("\tCreating Dataset (nonexistent or incorrect format catch)")
     data_raw = tf.constant(encode(text))
     text = None
-    data_len = len(data_raw) // 2
+    data_len = len(data_raw) // 8
     data_input = []
     data_labels = []
 
@@ -69,7 +70,7 @@ except:
     print("\tInstancing Dataset")
     dataset_full = tf.data.Dataset.from_tensor_slices((data_input, data_labels))
     print("\tSaving Dataset")
-    tf.data.Dataset.save(dataset_full, "./" + DEFAULT_DATASET_FILENAME)
+    #tf.data.Dataset.save(dataset_full, "./" + DEFAULT_DATASET_FILENAME)
 
 print("Batching and Prefetching Dataset")
 #dataset_full.unbatch()
@@ -108,9 +109,6 @@ class BigramLanguageModel(tf.keras.models.Model):
         self.ln_f = layers.LayerNormalization() # final layer norm
         self.lm_head = layers.Dense(vocab_size)
 
-    def build(self, input_shape):
-        self.lm_head.build(N_EMBED)
-
     def call(self, input): #Predict something
         B, T = input.shape
 
@@ -119,10 +117,11 @@ class BigramLanguageModel(tf.keras.models.Model):
         x = tok_emb + pos_emb #(B, T, C)
         x = self.blocks(x) #(B, T, C)
         x = self.ln_f(x) #(B, T, C)
-        logits = self.lm_head(x) #(B, T, vocab_size)
+        x = layers.Flatten()(x) # (B, T*C)
+        x = self.lm_head(x) #(B, vocab_size)
+        x = tf.nn.softmax(x)
 
-
-        return logits
+        return x
 
     def generate(self, idx, max_new_tokens): #Babble for me please
         # idx is (B, T) array of indices in the current context
@@ -130,11 +129,11 @@ class BigramLanguageModel(tf.keras.models.Model):
             # crop idx to the last block_size tokens
             idx_cond = idx[:, -1 * ATTENT_SPAN:]
             # get the predictions
-            logits = self(idx_cond)
+            logits = self(idx_cond) # (B, vocab_size)
             # focus only on the last time step
-            logits = logits[:, -1, :] # becomes (B, C)
+
             # apply softmax to get probabilities
-            probs = tf.nn.softmax(logits, axis=-1) # (B, C)
+            probs = tf.nn.softmax(logits, axis=-1) # (B, vocab_size)
             # sample from the distribution
             idx_next = tf.raw_ops.Multinomial(probs, 1) # (B, 1)
 
@@ -142,11 +141,17 @@ class BigramLanguageModel(tf.keras.models.Model):
             idx = tf.raw_ops.Concat(1, (idx, idx_next)) # (B, T+1)
         return idx
     
-print("Training")
+print("\nTraining")
 model = BigramLanguageModel()
-model.compile(optimizer='adam', loss=tf.keras.losses.BinaryCrossentropy(from_logits=True))
-model.fit(dataset_full, epochs=10)
+model.compile(optimizer='adam', loss=tf.keras.losses.SparseCategoricalCrossentropy())
+model.fit(dataset_full, epochs=EPOCHS)
 
-print("Generating")
+print("\nShowing Predictor")
+context = np.arange(ATTENT_SPAN)
+context.shape = (1, ATTENT_SPAN)
+result = model.call(tf.constant(context))
+print("\t{}".format(result))
+
+print("\nGenerating")
 context = tf.ones((1,1), dtype=tf.float32)
 print(decode(model.generate(context, max_new_tokens=2000)[0].to_list()))
