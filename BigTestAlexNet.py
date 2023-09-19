@@ -23,7 +23,7 @@ for device in gpu_devices:
 
 MAX_EPOCH = 15
 BATCH_SIZE = 4
-INIT_LRATE = 0.005 #AlexNet Paper used 0.1 initially, but AL and PLU seem to want something.... smaller
+INIT_LRATE = 0.005 #AlexNet Paper used 0.01 initially, but AL and PLU seem to want something.... smaller
 LRATE_EPOCH_DEC = 3
 LRATE_DECREASE = 0.1 # divide by 10 from AlexNet Paper
 MOMENTUM = 0.9 #From AlexNet Paper
@@ -86,9 +86,6 @@ def prepare_dataset(ds, augment=False):
         else:
             print("\t\tReplacing Original with Augment")
             dsn = ds.map(preprocess2, num_parallel_calls=tf.data.AUTOTUNE, deterministic=False)
-
-    #dsn = dsn.unbatch()
-    dsn.batch(BATCH_SIZE)
 
     print("\tDataset Prepared")
     return dsn.prefetch(buffer_size=tf.data.AUTOTUNE)
