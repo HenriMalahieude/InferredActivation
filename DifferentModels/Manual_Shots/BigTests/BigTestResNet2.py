@@ -17,18 +17,18 @@ logger.addHandler(fileHandle)
 #Rest of the script
 print("Starting ResNet50 Manual Sandbox")
 DATASET = "cifar10" #cifar10 / imagenette / imagenet2012
-BATCH_SIZE = 128 # cifar10 -> 128, imagenette -> 16, imagenet2012
+BATCH_SIZE = 128 # cifar10 -> 128/16, imagenette -> 8/4, imagenet2012 -> 4/2
 AUGMENT = True
 CONCAT = True
 AUGMENT_FACTOR = 0.1
 print("\t{} Dataset\n\t{} Batch Size\n\tAugmenting? {}\n\tConcatenating Augment? {}\n\t{} Augment Factor".format(DATASET, BATCH_SIZE, AUGMENT, CONCAT, AUGMENT_FACTOR))
 
-EPOCHS = 50
-INIT_LRATE = 0.01
-LRATE_EPOCH_DEC = 5
-LRATE_DECREASE = 0.1
-MOMENTUM = 0.9
-WEIGHT_DECAY = 0.0005
+EPOCHS = 20
+INIT_LRATE = 0.01 #0.1 as papers says
+LRATE_EPOCH_DEC = 5 #every time error plateaus as paper says
+LRATE_DECREASE = 0.1 #0.1 as paper says
+MOMENTUM = 0.9 #0.9 as paper says
+WEIGHT_DECAY = 0.0001 #0.0001 as paper says
 print("\t{} Epochs\n\t{} Initial Learning Rate\n\t{} decrease per {} epochs\n\t{} EMA\n\t{} Weight Decay".format(EPOCHS, INIT_LRATE, LRATE_DECREASE, LRATE_EPOCH_DEC, MOMENTUM, WEIGHT_DECAY))
 
 IMAGE_SIZE = (224, 224) #3 Color Channels is assumed
@@ -222,8 +222,9 @@ logger.info("Training T1: {}".format(hist.history["T1"]))
 logger.info("Training Loss: {}".format(hist.history["loss"]))
 
 print("\n")
+logger.info("\n")
 if DATASET != 'cifar10' and DATASET != 'imagenette':
-	logger.info("\nValidate T500: {}".format(hist.history["val_T500"]))
+	logger.info("Validate T500: {}".format(hist.history["val_T500"]))
 	logger.info("Validate T250: {}".format(hist.history["val_T250"]))
 logger.info("Validate T5: {}".format(hist.history["val_T5"]))
 logger.info("Validate T3: {}".format(hist.history["val_T3"]))
