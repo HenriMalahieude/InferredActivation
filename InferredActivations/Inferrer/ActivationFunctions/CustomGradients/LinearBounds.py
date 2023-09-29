@@ -37,11 +37,11 @@ def InnerBound(self, input, paramIndex = [1, 2], boundIndex = [0, 1]):
 		def grad_fn(dx, variables):
 			dy_dx = dx * (bound * self.pwlParams[paramIndex[0]])
 
-			bound_diff = self.bounds[boundIndex[1]] - self.bounds[boundIndex[0]]
-			bound_diff = (bound_diff / self.maximum_interval_length)
-			bound_diff = tf.math.minimum(tf.math.maximum(bound_diff, -1), 1)
+			#bound_diff = self.bounds[boundIndex[1]] - self.bounds[boundIndex[0]]
+			#bound_diff = (bound_diff / self.maximum_interval_length)
+			#bound_diff = tf.math.minimum(tf.math.maximum(bound_diff, -1), 1)
 
-			dscalar0 = tf.constant([1, 1], dtype=x.dtype) * tf.reduce_mean(dy_dx) * bound_diff #IDEA: gradient is also affected by distance between surrounding boundaries
+			dscalar0 = tf.constant([1, 1], dtype=x.dtype) * tf.reduce_mean(dy_dx) #* bound_diff #IDEA: gradient is also affected by distance between surrounding boundaries
 			dscalar1 = tf.gather_nd(self.pwlParams, [[paramIndex[0]], [paramIndex[1]]]) * tf.reduce_mean(bound * dx)
 
 			dbounds = tf.pad(dscalar0, [[boundIndex[0], variables[0].shape.as_list()[0] - (boundIndex[0] + 2)]])

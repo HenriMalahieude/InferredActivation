@@ -45,7 +45,7 @@ class ActivationLinearizer(layers.Layer):
         self.bounds = self.add_weight(shape=(self.pw_count-1,), initializer='ones', trainable=True)
         self.pwlParams = self.add_weight(shape=(self.pw_count*2,), initializer='ones', trainable=True)
 
-        noted_bounds = np.linspace(self.left_bound, self.right_bound, self.pw_count-1) #Bounds could be a param later
+        noted_bounds = np.linspace(self.left_bound, self.right_bound, self.pw_count-1) #Bounds could be an init param later
         self.set_weights([noted_bounds, np.random.randn(self.pw_count*2)])
 
         if self.initialization == 'sigmoid':
