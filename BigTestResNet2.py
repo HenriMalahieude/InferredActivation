@@ -197,14 +197,14 @@ with strat.scope():
 	metrics_to_use = []
 	if DATASET != "cifar10" and DATASET != "imagenette":
 		metrics_to_use.extend([
-			tf.keras.metrics.TopKCategoricalAccuracy(k=500, name="T500"),
-			tf.keras.metrics.TopKCategoricalAccuracy(k=250, name="T250")
+			tf.keras.metrics.SparseTopKCategoricalAccuracy(k=500, name="T500"),
+			tf.keras.metrics.SparseTopKCategoricalAccuracy(k=250, name="T250")
 		])
 
 	metrics_to_use.extend([
-		tf.keras.metrics.TopKCategoricalAccuracy(k=5, name="T5"),
-		tf.keras.metrics.TopKCategoricalAccuracy(k=3, name="T3"),
-		tf.keras.metrics.TopKCategoricalAccuracy(k=1, name="T1"),
+		tf.keras.metrics.SparseTopKCategoricalAccuracy(k=5, name="T5"),
+		tf.keras.metrics.SparseTopKCategoricalAccuracy(k=3, name="T3"),
+		tf.keras.metrics.SparseTopKCategoricalAccuracy(k=1, name="T1"),
 	])
 
 print("\nTraining Model")
