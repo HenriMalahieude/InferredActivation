@@ -1,7 +1,7 @@
 import tensorflow as tf
 
 #NOTE: This requires that self have "bounds" and "pwlParams" 
-def OuterBound(self, input, paramIndex = [0, 0], boundIndex = 0, top = False):
+def OuterBoundUnlocked(self, input, paramIndex = [0, 0], boundIndex = 0, top = False):
 	assert len(paramIndex) == 2
 
 	@tf.custom_gradient
@@ -25,7 +25,7 @@ def OuterBound(self, input, paramIndex = [0, 0], boundIndex = 0, top = False):
 
 #NOTE: Expects only size 2 parameter and bound indices
 #self is expected to have "bounds", "pwlParams", and "maximum_interval_length" attributes
-def InnerBound(self, input, paramIndex = [1, 2], boundIndex = [0, 1]):
+def InnerBoundUnlocked(self, input, paramIndex = [1, 2], boundIndex = [0, 1]):
 	assert len(paramIndex) == 2
 	assert len(boundIndex) == 2
 	assert boundIndex[0] < boundIndex[1]

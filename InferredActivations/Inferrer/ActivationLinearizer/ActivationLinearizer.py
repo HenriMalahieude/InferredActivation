@@ -1,8 +1,11 @@
 import numpy as np
 import tensorflow as tf
-import LinearBounds
+from .LinearBounds import OuterBoundUnlocked, InnerBoundUnlocked
 from .AL_Activators import *
 from keras import layers
+
+#NOTE: pwlParams is organized where [slope, bias, slope2, bias2, ..., etc]
+#NOTE: bounds is organized where [b1, b2, b3, ..., etc] and are simple floats marking boundaries
 
 @tf.keras.saving.register_keras_serializable('InferredActivation')
 class ActivationLinearizer(layers.Layer):
@@ -64,19 +67,31 @@ class ActivationLinearizer(layers.Layer):
             print('ActivationLinearizer: initializer not implemented, defaulting to random')    
     
     def _call_unlock(self, inputs):
-        sum = LinearBounds.OuterBound(self, inputs, paramIndex=[0, 1], boundIndex=0) 
-        sum += LinearBounds.OuterBound(self, inputs, paramIndex=[(self.pw_count*2)-2, (self.pw_count*2)-1], boundIndex=(self.pw_count-2), top=True)
+        sum = OuterBoundUnlocked(self, inputs, paramIndex=[0, 1], boundIndex=0) 
+        sum += OuterBoundUnlocked(self, inputs, paramIndex=[(self.pw_count*2)-2, (self.pw_count*2)-1], boundIndex=(self.pw_count-2), top=True)
         for i in range(self.pw_count-2):
             index_bound = i
             index_slope = index_bound*2 + 2
-            sum += LinearBounds.InnerBound(self, inputs, paramIndex=[index_slope, index_slope+1], boundIndex=[index_bound, index_bound+1])
+            sum += InnerBoundUnlocked(self, inputs, paramIndex=[index_slope, index_slope+1], boundIndex=[index_bound, index_bound+1])
         
         return sum
     
     def _call_lock(self, inputs):
-        
+        bounds_calced = [OuterLockedBound(inputs, self.bounds[0])]
+        for i in range(self.pw_count-2):
+            index = i
+            bounds_calced.append(InnerLockedBound(inputs, self.bounds[index], self.bounds[index+1]))
 
-        return inputs #TODO!!!
+        bounds_calced.append(OuterLockedBound(inputs, self.bounds[self.pw_count-1]))
+
+        output = (bounds_calced[0] * inputs) * self.pwlParams[0] + self.pwlParams[1]
+        output += (bounds_calced[-1] * inputs) * self.pwlParams[-2] + self.pwlParams[-1]
+        for i in range(self.pw_count-2):
+            index_bound = i
+            index_slope = index_bound*2 + 2
+            output += (bounds_calced[index_bound] * inputs) * self.pwlParams[index_slope] + self.pwlParams[index_slope+1]
+
+        return output
     
     def call(self, inputs):
         if self.boundary_lock:
@@ -98,3 +113,11 @@ class ActivationLinearizer(layers.Layer):
             print(str(i+2) + ". y = " + str(self.pwlParams[index_slope].numpy()) + "x + " + str(self.pwlParams[index_slope+1].numpy()) + " { " + str(self.bounds[index_bound].numpy()) + " < x <= " + str(self.bounds[index_bound+1].numpy()) + " }")
 
         print(str(self.pw_count) + ". y = " + str(self.pwlParams[self.pw_count*2-2].numpy()) + "x + " + str(self.pwlParams[self.pw_count*2-1].numpy()) + " { " + str(self.bounds[self.pw_count-2].numpy()) + " < x }")
+
+def OuterLockedBound(inputs, bound, top=True):
+    func = tf.math.less_equal if top else tf.math.greater
+    return tf.cast(func(inputs, bound), inputs.dtype)
+
+def InnerLockedBound(inputs, bound1, bound2):
+    assert bound1 < bound2
+    return tf.cast(tf.math.logical_and(tf.math.greater(inputs, bound1), tf.math.less_equal(inputs, bound2)), inputs.dtype)
