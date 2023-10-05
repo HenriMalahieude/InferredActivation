@@ -1,6 +1,6 @@
 import numpy as np
 import InferredActivations.Inferrer as IAI
-import InferredActivations.Inferrer.ActivationFunctions as AF
+import InferredActivations.Inferrer.ProtoActivations as AF
 import InferredActivations.Inferrer.ActivationLinearizer as AL
 import LeNet_Experiment.Global as G
 import tensorflow as tf

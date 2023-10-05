@@ -1,6 +1,6 @@
 import logging
 import InferredActivations.Inferrer as IL
-import InferredActivations.Inferrer.ActivationFunctions as IA
+import InferredActivations.Inferrer.ProtoActivations as IA
 import LeNet_Experiment.Global as G
 from keras import models, layers
 
