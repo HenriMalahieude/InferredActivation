@@ -1,5 +1,5 @@
 from keras import layers
-from .ActivationFunctions import SigApproximator
+from .ProtoActivations import SigApproximator
 
 #Now that Approximators are wrapped in a meta EqAproximator function, there should no longer need to be any edits to this
 class InferredActivation(layers.Layer):
