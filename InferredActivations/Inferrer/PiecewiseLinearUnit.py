@@ -22,6 +22,7 @@ class PiecewiseLinearUnitV1(layers.Layer):
 		self.running_avg = 0
 		self.running_std = 1
 		self.momentum = momentum
+		self.boundary_lock = False
 
 		self.collect_stats = False
 
@@ -76,7 +77,7 @@ class PiecewiseLinearUnitV1(layers.Layer):
 			
 			return y, grad
 
-		intervals = intervalFunc(self.N)
+		intervals = intervalFunc(self.N) if not self.boundary_lock else tf.math.floor(self.N)
 		Br, Bl = self.Bounds[1], self.Bounds[0]
 		Kr, Kl = self.BoundSlope[1], self.BoundSlope[0]
 
@@ -141,3 +142,10 @@ class PiecewiseLinearUnitV1(layers.Layer):
 			self.set_weights([self.N_start, np.array([Bl_stat , Br_stat]), np.array([0, 1]), np.linspace(start=Bl_stat, stop=Br_stat, num=self.max_n+1)])
 			print("\nRunning Mean: " + str(self.running_avg))
 			print("Running Deviation: " + str(self.running_std))
+
+	def ToggleBoundaryLock(self, forceTo=None):
+		if forceTo != None and type(forceTo) is bool:
+			self.boundary_lock = forceTo
+			return
+		
+		self.boundary_lock = not self.boundary_lock

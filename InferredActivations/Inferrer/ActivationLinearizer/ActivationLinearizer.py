@@ -95,9 +95,9 @@ class ActivationLinearizer(layers.Layer):
     
     def call(self, inputs):
         if self.boundary_lock:
-            return self._call_lock(self, inputs)
+            return self._call_lock(inputs)
         else:
-            return self._call_unlock(self, inputs)
+            return self._call_unlock(inputs)
     
     def lock_boundaries(self, force_to = None):
         if force_to != None:

@@ -176,13 +176,18 @@ with strat.scope():
         tf.keras.callbacks.LearningRateScheduler(learn_rate_scheduler, verbose=1)
     ]
 
-    metrics_to_use = [
-        tf.keras.metrics.SparseTopKCategoricalAccuracy(k=500, name="T500"),
-        tf.keras.metrics.SparseTopKCategoricalAccuracy(k=250, name="T250"),
+    metrics_to_use = []
+    if DATASET == "imagenet2012":
+        metrics_to_use.extend([
+            tf.keras.metrics.SparseTopKCategoricalAccuracy(k=500, name="T500"),
+            tf.keras.metrics.SparseTopKCategoricalAccuracy(k=250, name="T250")
+        ])
+
+    metrics_to_use.extend([
         tf.keras.metrics.SparseTopKCategoricalAccuracy(k=5, name="T5"), 
         tf.keras.metrics.SparseTopKCategoricalAccuracy(k=3, name="T3"), 
         tf.keras.metrics.SparseTopKCategoricalAccuracy(k=1, name="T1")
-    ]
+    ])
 
 print("\nBeginning Training")
 alex_net.compile(optimizer=optim, loss=tf.keras.losses.SparseCategoricalCrossentropy(), metrics=metrics_to_use)
@@ -190,15 +195,17 @@ hist = alex_net.fit(train_data, epochs=MAX_EPOCH, validation_data=val_data, call
 
 logger.info("{} {} History: ".format(DATASET, ACTS))
 logger.info("Training Loss: {}".format(hist.history["loss"]))
-logger.info("Training T500: {}".format(hist.history["T500"]))
-logger.info("Training T250: {}".format(hist.history["T250"]))
+if DATASET == "imagenet2012":
+    logger.info("Training T500: {}".format(hist.history["T500"]))
+    logger.info("Training T250: {}".format(hist.history["T250"]))
 logger.info("Training T5: {}".format(hist.history["T5"]))
 logger.info("Training T3: {}".format(hist.history["T3"]))
 logger.info("Training T1: {}".format(hist.history["T1"]))
 
 logger.info("\nValidation Loss: {}".format(hist.history["val_loss"]))
-logger.info("Validation T500: {}".format(hist.history["val_T500"]))
-logger.info("Validation T250: {}".format(hist.history["val_T250"]))
+if DATASET == "imagenet2012":
+    logger.info("Validation T500: {}".format(hist.history["val_T500"]))
+    logger.info("Validation T250: {}".format(hist.history["val_T250"]))
 logger.info("Validation T5: {}".format(hist.history["val_T5"]))
 logger.info("Validation T3: {}".format(hist.history["val_T3"]))
 logger.info("Validation T1: {}".format(hist.history["val_T1"]))
