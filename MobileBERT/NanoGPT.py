@@ -9,19 +9,17 @@ from keras import layers
 
 # Hyperparameters
 EPOCHS = 1 # How many times we cycle through the training data
-BATCH_SIZE = 32 # How many independent sequences will we process in parallel?
+BATCH_SIZE = 64 # How many independent sequences will we process in parallel?
 ATTENT_SPAN = 32 # What is the maximum context length for predictions? (Used to build dataset too)
 VAL_SPLIT=0.1 # How much of the dataset to put to the side for validation
 N_EMBED = 64 
 N_HEAD = 4 # Amount of Attention Heads in Multi-Headed Attention
 N_LAYER = 4 # Amount of Multi-Headed Attention Layers (Transformers)
 DROPOUT = 0.1
-
-#DEFAULT_DATASET_FILENAME = "nano_shakespeare_ds"
 # ------------
 print("Starting NanoGPT Sandbox, credit to Andrej Karpathy's video")
 
-print("Opening Shakespeare File")
+print("\nOpening Shakespeare File")
 with open('shakespeare.txt', 'r', encoding='utf-8') as f:
     text = f.read()
 
@@ -35,47 +33,20 @@ itos = { i:ch for i,ch in enumerate(chars) }
 encode = lambda s: [stoi[c] for c in s] # encoder: take a string, output a list of integers
 decode = lambda l: ''.join([itos[i] for i in l]) # decoder: take a list of integers, output a string
 
-print("Prepping Dataset")
-dataset_full = None
+print("\nPrepping Dataset")
+data_raw = tf.constant(encode(text))
+label_raw = data_raw[ATTENT_SPAN::ATTENT_SPAN]
+data_len = len(data_raw)
 
-try:
-    print("\tAttempting to Open Dataset")
-    #dataset_full = tf.data.Dataset.load(("./" + DEFAULT_DATASET_FILENAME))
-
-    print("\tChecking if Loaded Dataset can be used")
-    can_use = True
-
-    for x, y in dataset_full:
-        if x.shape[-1] != ATTENT_SPAN: #Expecting a shape of B, T where T == ATTENT_SPAN
-            raise ValueError("This dataset needs to be reformatted")
-        
-        break
-
-except:
-    print("\tCreating Dataset (nonexistent or incorrect format catch)")
-    data_raw = tf.constant(encode(text))
-    text = None
-    data_len = len(data_raw) // 8
-    data_input = []
-    data_labels = []
-
-    for i in range(data_len - ATTENT_SPAN): #Honestly, I should just load this into a generator function to be real
-        print("\t% ", int((i / data_len) * 10000) / 100, end="\r")
-        index_at = i + ATTENT_SPAN
-        data_input.append(data_raw[i:index_at])
-        data_labels.append(data_raw[index_at])
-
-    print("\t% 100     ")
-
-    print("\tInstancing Dataset")
-    dataset_full = tf.data.Dataset.from_tensor_slices((data_input, data_labels))
-    print("\tSaving Dataset")
-    #tf.data.Dataset.save(dataset_full, "./" + DEFAULT_DATASET_FILENAME)
+print("\tInstancing Dataset")
+dataset_x = tf.data.Dataset.from_tensor_slices(data_raw)
+dataset_y = tf.data.Dataset.from_tensor_slices(label_raw)
 
 print("Batching and Prefetching Dataset")
 #dataset_full.unbatch()
-dataset_full = dataset_full.batch(BATCH_SIZE, drop_remainder=True)
-dataset_full = dataset_full.prefetch(buffer_size=tf.data.AUTOTUNE)
+dataset_x = dataset_x.batch(ATTENT_SPAN, drop_remainder=True).batch(BATCH_SIZE, drop_remainder=True).prefetch(buffer_size=tf.data.AUTOTUNE) #Transform from () -> (T) -> (B, T)
+dataset_y = dataset_y.batch(BATCH_SIZE, drop_remainder=True).prefetch(buffer_size=tf.data.AUTOTUNE)
+dataset_full = tf.data.Dataset.zip(dataset_x, dataset_y)
 text = None
 
 print("Defining Transformer Stuff")
@@ -110,10 +81,10 @@ class BigramLanguageModel(tf.keras.models.Model):
         self.lm_head = layers.Dense(vocab_size)
 
     def call(self, input): #Predict something
-        B, T = input.shape
+        T = tf.shape(input)[1]
 
         tok_emb = self.token_embedding_table(input) #(B, T, C)
-        pos_emb = self.position_embedding_table(np.arange(T)) #(T, C)
+        pos_emb = self.position_embedding_table(tf.range(T)) #(T, C)
         x = tok_emb + pos_emb #(B, T, C)
         x = self.blocks(x) #(B, T, C)
         x = self.ln_f(x) #(B, T, C)
