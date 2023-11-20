@@ -3,6 +3,7 @@ import numpy as np
 
 from keras import layers
 
+TEMP_INF = 1000000000
 #A lot of help from Andrej Karpathy's GPT video: https://www.youtube.com/watch?v=kCc8FmEb1nY
 
 class SingleHeadAttention(tf.keras.layers.Layer):
@@ -21,7 +22,7 @@ class SingleHeadAttention(tf.keras.layers.Layer):
         B, T, C = input_shape
         tril = np.tril(tf.ones((T, T)))
         inv_tril = tf.cast(tf.equal(tril, 0), tf.float32)
-        self.inv_tril_inf = inv_tril * float('-inf')
+        self.inv_tril_inf = inv_tril * (TEMP_INF * -1)
 
         #Key: I am this token
         self.key = layers.Dense(self.head_size, use_bias=False) 
@@ -48,10 +49,10 @@ class SingleHeadAttention(tf.keras.layers.Layer):
 
         # V--------------------------------------------------------------------This is where we could potentially do "approximations"
         wei = self.softmax_func(wei) 
-
+        
         v = self.value(inputs)
         y = tf.linalg.matmul(wei, v)#inputs)
-        
+
         return y
     
 class MultiHeadAttention(tf.keras.layers.Layer):
