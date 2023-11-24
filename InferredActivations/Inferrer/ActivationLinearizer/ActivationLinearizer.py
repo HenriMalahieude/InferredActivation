@@ -4,8 +4,22 @@ from .LinearBounds import OuterBoundUnlocked, InnerBoundUnlocked
 from .AL_Activators import *
 from keras import layers
 
+
+TEMP_INF = 100000000
 #NOTE: pwlParams is organized where [slope, bias, slope2, bias2, ..., etc]
 #NOTE: bounds is organized where [b1, b2, b3, ..., etc] and are simple floats marking boundaries
+
+class SingleValueMinMax(tf.keras.constraints.Constraint):
+    def __init__(self, min_value, max_value):
+        self.min = min_value
+        self.max = max_value
+        super(SingleValueMinMax, self).__init__()
+
+    def __call__(self, w):
+        return tf.clip_by_value(w, self.min, self.max)
+    
+    def get_config(self):
+        return {'min': self.min, 'max': self.max}
 
 @tf.keras.saving.register_keras_serializable('InferredActivation')
 class ActivationLinearizer(layers.Layer):
@@ -16,7 +30,7 @@ class ActivationLinearizer(layers.Layer):
                  left_bound: float = -6,
                  right_bound: float = 6,
                  center_offset: float = 0,
-                 interval_length: int = 5 #Encourage a interval length of this
+                 interval_length: int = 5 #Encourage a interval length of this (Currently Disabled)
                  ):
         super(ActivationLinearizer, self).__init__()
         assert left_bound < right_bound
@@ -47,10 +61,10 @@ class ActivationLinearizer(layers.Layer):
         return ActivationLinearizer(config["initialization"], config["pw_count"], config["left_bound"], config["right_bound"], config["center_offset"], config["maximum_interval_length"])
 
     def build(self, input_shape):
-        self.bounds = self.add_weight(shape=(self.pw_count-1,), initializer='ones', trainable=True)
-        self.pwlParams = self.add_weight(shape=(self.pw_count*2,), initializer='ones', trainable=True)
+        self.bounds = self.add_weight(shape=(self.pw_count-1,), initializer='ones', trainable=True, constraint=SingleValueMinMax(-1 * TEMP_INF, TEMP_INF))
+        self.pwlParams = self.add_weight(shape=(self.pw_count*2,), initializer='ones', trainable=True, constraint=SingleValueMinMax(-1 * TEMP_INF, TEMP_INF))
 
-        noted_bounds = np.linspace(self.left_bound, self.right_bound, self.pw_count-1) #Bounds could be an init param later
+        noted_bounds = np.linspace(self.left_bound, self.right_bound, self.pw_count-1) #Bounds could be an init param in a later iteration of AL
         self.set_weights([noted_bounds, np.random.randn(self.pw_count*2)])
 
         if self.initialization == 'sigmoid':

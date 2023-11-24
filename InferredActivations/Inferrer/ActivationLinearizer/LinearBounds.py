@@ -43,6 +43,7 @@ def InnerBoundUnlocked(self, input, paramIndex = [1, 2], boundIndex = [0, 1]):
 
 			dscalar0 = tf.constant([1, 1], dtype=x.dtype) * tf.reduce_mean(dy_dx) #* bound_diff #IDEA: gradient is also affected by distance between surrounding boundaries
 			dscalar1 = tf.gather_nd(self.pwlParams, [[paramIndex[0]], [paramIndex[1]]]) * tf.reduce_mean(bound * dx)
+			#NOTE: we could move the bound in (bound * dx) to the outside of the mean reduce to see any changes.
 
 			dbounds = tf.pad(dscalar0, [[boundIndex[0], variables[0].shape.as_list()[0] - (boundIndex[0] + 2)]])
 			dparams = tf.pad(dscalar1, [[paramIndex[0], variables[1].shape.as_list()[0] - (paramIndex[0] + 2)]])
