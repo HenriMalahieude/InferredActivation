@@ -10,12 +10,12 @@ class SingleHeadAttention(tf.keras.layers.Layer):
     def __init__(self, 
                  encoder: bool = False, #either encode (make text) or decode (understand text)
                  head_size: int = 16,
-                 softmax_replacement = tf.nn.softmax 
+                 softmax_replacement = None
                 ):
         super(SingleHeadAttention, self).__init__()
         self.encoder = encoder
         self.head_size = head_size
-        self.softmax_func = softmax_replacement
+        self.softmax_func = tf.nn.softmax if softmax_replacement == None else softmax_replacement()
     
     #Expects something like (Batch, Time, Channel)
     def build(self, input_shape):
@@ -60,7 +60,7 @@ class MultiHeadAttention(tf.keras.layers.Layer):
                  encoder = False,
                  head_count: int = 3,
                  head_size: int = 16,
-                 softmax_replacement = tf.nn.softmax
+                 softmax_replacement = None
                  ):
         super(MultiHeadAttention, self).__init__()
 
