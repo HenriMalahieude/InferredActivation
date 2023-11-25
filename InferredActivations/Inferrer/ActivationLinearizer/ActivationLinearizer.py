@@ -21,6 +21,16 @@ class SingleValueMinMax(tf.keras.constraints.Constraint):
     def get_config(self):
         return {'min': self.min, 'max': self.max}
 
+#NOTE: This is a temporary change, I don't think it will improve performance because anything NaN will just get defaulted to zero instead of the value it had before
+class NoNaNConstraintWrapper(tf.keras.constraints.Constraint):
+    def __init__(self, wrapped):
+        self.inner = wrapped
+
+    def __call__(self, w):
+        w = self.inner(w)
+        nan_finder = (tf.cast(tf.math.is_nan(w), dtype=tf.float32) - 1.0) * -1.0
+        return tf.math.multiply_no_nan(w, nan_finder) #Multiplies each value by 0 if NaN (which is then defaulted to zero) or then 1 if "aN"
+
 @tf.keras.saving.register_keras_serializable('InferredActivation')
 class ActivationLinearizer(layers.Layer):
     def __init__(self, 
@@ -29,7 +39,7 @@ class ActivationLinearizer(layers.Layer):
                  divisions: float = 6, #including outer bounds
                  left_bound: float = -6,
                  right_bound: float = 6,
-                 center_offset: float = 0,
+                 center_offset: float = 0, #Unused for now
                  interval_length: int = 5 #Encourage a interval length of this (Currently Disabled)
                  ):
         super(ActivationLinearizer, self).__init__()
@@ -61,8 +71,8 @@ class ActivationLinearizer(layers.Layer):
         return ActivationLinearizer(config["initialization"], config["pw_count"], config["left_bound"], config["right_bound"], config["center_offset"], config["maximum_interval_length"])
 
     def build(self, input_shape):
-        self.bounds = self.add_weight(shape=(self.pw_count-1,), initializer='ones', trainable=True, constraint=SingleValueMinMax(-1 * TEMP_INF, TEMP_INF))
-        self.pwlParams = self.add_weight(shape=(self.pw_count*2,), initializer='ones', trainable=True, constraint=SingleValueMinMax(-1 * TEMP_INF, TEMP_INF))
+        self.bounds = self.add_weight(shape=(self.pw_count-1,), initializer='ones', trainable=True)#, constraint=NoNaNConstraintWrapper(SingleValueMinMax(-1 * TEMP_INF, TEMP_INF)))
+        self.pwlParams = self.add_weight(shape=(self.pw_count*2,), initializer='ones', trainable=True)#, constraint=NoNaNConstraintWrapper(SingleValueMinMax(-1 * TEMP_INF, TEMP_INF)))
 
         noted_bounds = np.linspace(self.left_bound, self.right_bound, self.pw_count-1) #Bounds could be an init param in a later iteration of AL
         self.set_weights([noted_bounds, np.random.randn(self.pw_count*2)])
