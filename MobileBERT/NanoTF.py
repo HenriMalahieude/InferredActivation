@@ -1,7 +1,10 @@
 #Some code copying from NanoGPT.py
 import math
 import tensorflow as tf
+from MobileBERT.Transformer.Attention import MultiHeadAttention
 from keras import layers
+from InferredActivations.Inferrer.ActivationLinearizer import ActivationLinearizer
+from InferredActivations.Inferrer.LinearMax import LinearMaxV1, LinearMaxV3
 
 #Insert hyperparameters here
 EPOCHS = 5
@@ -11,6 +14,9 @@ N_EMBED = 64 #embeding count
 N_HEAD = 8 #How many attention heads in a transformer
 N_BLOCKS = 4 #Amount of transformers in our model
 DROPOUT = 0.1
+
+MODE = "Custom-AL-Soft"
+assert MODE in ["Normal", "Custom-1", "Custom-AL-NN", "Custom-AL-Soft", "Custom-AL-ALL", "Custom-W-Soft"]
 #
 
 print("Starting NanoGPT attempt two")
@@ -21,7 +27,7 @@ print("\t{} Batch Size".format(BATCH_SIZE),
       "\t{} Transformers in Sequence".format(N_BLOCKS), sep="\n")
 
 print("\nOpening Shakespeare file")
-with open('shakespeare.txt', 'r', encoding='utf-8') as f:
+with open('MobileBERT/shakespeare.txt', 'r', encoding='utf-8') as f:
 	text = f.read()
 
 chars = sorted(list(set(text)))
@@ -51,19 +57,21 @@ class PlaywrightGenerator(tf.keras.utils.Sequence):
         y = tf.constant(data_raw[start+ATTENT_SPAN:(start+ATTENT_SPAN+BATCH_SIZE)]) #(B) Batch of correct predictions to the next token
         return (x, y)
     
-print("\nDefining Transformer Stuff")
+print("\nDefining Transformer Stuff ({} Mode)".format(MODE))
 class TransformerBlock(layers.Layer):
     def __init__(self):
         super(TransformerBlock, self).__init__()
         self.head_size = N_EMBED // N_HEAD
         
-
     def build(self, input_shape):
         self.sa = layers.MultiHeadAttention(num_heads=N_HEAD, key_dim=self.head_size, value_dim=self.head_size)
+        if MODE.startswith("Custom"):
+            sft_rplc = (tf.nn.softmax if (MODE == "Normal" or MODE == "Custom-AL-NN" or MODE == "Custom-1") else (LinearMaxV3 if MODE == "Custom-W-Soft" else LinearMaxV1))
+            self.sa = MultiHeadAttention(False, N_HEAD, self.head_size, sft_rplc)
 
         self.ffwd = tf.keras.models.Sequential([
             layers.Dense(4 * N_EMBED),
-            layers.Activation("relu"),
+            layers.Activation("relu") if (MODE == "Normal" or MODE == "Custom-AL-Soft" or MODE == "Custom-1" or MODE == "Custom-W-Soft") else ActivationLinearizer("relu"),
             layers.Dense(N_EMBED),
             layers.Dropout(DROPOUT),
         ])
@@ -73,7 +81,11 @@ class TransformerBlock(layers.Layer):
 
     def call(self, x):
         n1 = self.ln1(x)
-        x = x + self.sa(n1, n1, use_causal_mask=True) #Ensure only decoder
+        if MODE.startswith("Custom"):
+            x = x + self.sa(n1)
+        else:
+            x = x + self.sa(n1, n1, use_causal_mask=True) #Ensure only decoder
+        
         x = x + self.ffwd(self.ln2(x))
         return x
 
@@ -119,12 +131,24 @@ class BigramLanguageModel(tf.keras.Model):
         
         return idx
 
-print("\nTraining")
+print("\nTraining ({} Mode)".format(MODE))
 model = BigramLanguageModel()
 model.compile("adam", loss=tf.keras.losses.SparseCategoricalCrossentropy(), metrics=["accuracy"])
-model.fit(PlaywrightGenerator(), epochs=EPOCHS)
+model.fit(PlaywrightGenerator(), epochs=EPOCHS, callbacks = [tf.keras.callbacks.TerminateOnNaN()])
 
-print("\nGenerating")
+for i in range(N_BLOCKS):
+    for j in range(N_HEAD):
+        model.blocks.layers[i].sa.heads[j].softmax_func.exp.extract_linears()
+
+"""
+print("\nGenerating ({} Mode)".format(MODE))
 context = tf.ones((1,ATTENT_SPAN-1), dtype=tf.float32)
 context = tf.raw_ops.Concat(concat_dim=1, values=(context, tf.constant([[0]], dtype=tf.float32)))
-print(decode(model.generate(context, max_new_tokens=500)[0].numpy()))
+print(decode(model.generate(context, max_new_tokens=500)[0].numpy()))#"""
+
+#Normal        : 1.54 loss | 0.53 accuracy | 08m/epoch (Okay Quality)
+#Custom-1      : 1.49 loss | 0.54 accuracy | 09m/epoch (Better Quality)
+#Custom-AL-NN  : 1.51 loss | 0.54 accuracy | 09m/epoch (Good Quality)
+#Custom-AL-Soft: nan  loss | 0.39 accuracy | ??m/epoch (NaN Quality)
+#Custom-AL-ALL : nan  loss | 0.04 accuracy | 11m/epoch (NaN Quality)
+#Custom-W-Soft : nan  loss | 0.02 accuracy | ??m/epoch (NaN Quality)
