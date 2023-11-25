@@ -8,6 +8,7 @@ from keras import models, layers
 
 #2023 Rendition of https://github.com/zpzim/LAMP-ICDM2019
 
+EPOCHS = 30
 BATCH_SIZE = 256
 AMOUNT_OF_INPUT_STREAMS = 1
 
@@ -18,6 +19,9 @@ LOOK_BEHIND = 5
 OUTPUT_SIZE = 256
 INPUT_SIZE = (WINDOW_SIZE, AMOUNT_OF_INPUT_STREAMS, OUTPUT_SIZE + (LOOK_BEHIND + LOOK_AHEAD))
 DATASET_PATH = "LAMP_Datasets/LCCB_dataset.mat"
+
+MODE = "Control"
+assert MODE in ["Control", "Control(Tanh)", "PWLU", "AL(Sig)", "AL(Tanh)"] #TODO: PWLU and AL(Sig) and Control(Tanh)
 
 print('Starting LAMP Sandbox with stats:')
 print("\tBatch Size: {}\n\tMP_Window Size: {}\n\t\tLook Ahead: {}\n\t\tLook Behind: {}".format(BATCH_SIZE, WINDOW_SIZE, LOOK_AHEAD, LOOK_BEHIND))
@@ -80,11 +84,11 @@ class LAMP_ResNetBlock(layers.Layer):
         self.conv_pass = models.Sequential([
             layers.Conv2D(self.feature_maps, (8,1), padding='same'),
             layers.BatchNormalization(),
-            II.PiecewiseLinearUnitV1(),#layers.Activation('relu'),
+            layers.Activation('relu') if MODE.startswith("Control") else II.ActivationLinearizer(),
 
             layers.Conv2D(self.feature_maps, (5,1), padding='same'),
             layers.BatchNormalization(),
-            II.PiecewiseLinearUnitV1(),#layers.Activation('relu'),
+            layers.Activation('relu') if MODE.startswith("Control") else II.ActivationLinearizer(),
 
             layers.Conv2D(self.feature_maps, (3,1), padding='same'),
             layers.BatchNormalization(),
@@ -99,7 +103,7 @@ class LAMP_ResNetBlock(layers.Layer):
         else:
             self.shortcut_pass = layers.BatchNormalization()
 
-        self.final_pass = II.PiecewiseLinearUnitV1()#layers.Activation('relu')
+        self.final_pass = layers.Activation('relu') if MODE.startswith("Control") else II.ActivationLinearizer()
         
     
     def call(self, input):
@@ -121,7 +125,7 @@ with strat.scope():
 
         layers.Flatten(),
         layers.Dense(OUTPUT_SIZE),
-        II.PiecewiseLinearUnitV1(),#layers.Activation('sigmoid'), #layers.Activation("tanh") as recommended
+        layers.Activation('sigmoid') if MODE == "Control" else II.ActivationLinearizer("sigmoid"), #layers.Activation("tanh") as recommended
         layers.Reshape((OUTPUT_SIZE, 1)),
     ])
 
@@ -130,9 +134,12 @@ with strat.scope():
 #LAMP_Model.summary()
 
 #"""
-print("\nTraining model")
+print("\nTraining model {}".format(MODE))
 LAMP_Model.compile(optimizer='adam', loss='mse')
-LAMP_Model.fit(train_data, epochs=3, validation_data=val_data)
+hist = LAMP_Model.fit(train_data, epochs=EPOCHS, validation_data=val_data)
+
+print(hist.history["loss"])
+print(hist.history["val_loss"])
 
 """print("\n")
 
