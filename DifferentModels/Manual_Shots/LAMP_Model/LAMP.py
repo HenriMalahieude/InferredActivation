@@ -20,7 +20,7 @@ OUTPUT_SIZE = 256
 INPUT_SIZE = (WINDOW_SIZE, AMOUNT_OF_INPUT_STREAMS, OUTPUT_SIZE + (LOOK_BEHIND + LOOK_AHEAD))
 DATASET_PATH = "LAMP_Datasets/LCCB_dataset.mat"
 
-MODE = "Control"
+MODE = "AL(Tanh)"
 assert MODE in ["Control", "Control(Tanh)", "PWLU", "AL(Sig)", "AL(Tanh)"] #TODO: PWLU and AL(Sig) and Control(Tanh)
 
 print('Starting LAMP Sandbox with stats:')
@@ -84,11 +84,11 @@ class LAMP_ResNetBlock(layers.Layer):
         self.conv_pass = models.Sequential([
             layers.Conv2D(self.feature_maps, (8,1), padding='same'),
             layers.BatchNormalization(),
-            layers.Activation('relu') if MODE.startswith("Control") else II.ActivationLinearizer(),
+            layers.Activation('relu') if MODE.startswith("Control") else (II.ActivationLinearizer() if MODE.startswith("AL") else II.PiecewiseLinearUnitV1()),
 
             layers.Conv2D(self.feature_maps, (5,1), padding='same'),
             layers.BatchNormalization(),
-            layers.Activation('relu') if MODE.startswith("Control") else II.ActivationLinearizer(),
+            layers.Activation('relu') if MODE.startswith("Control") else (II.ActivationLinearizer() if MODE.startswith("AL") else II.PiecewiseLinearUnitV1()),
 
             layers.Conv2D(self.feature_maps, (3,1), padding='same'),
             layers.BatchNormalization(),
@@ -103,7 +103,7 @@ class LAMP_ResNetBlock(layers.Layer):
         else:
             self.shortcut_pass = layers.BatchNormalization()
 
-        self.final_pass = layers.Activation('relu') if MODE.startswith("Control") else II.ActivationLinearizer()
+        self.final_pass = layers.Activation('relu') if MODE.startswith("Control") else (II.ActivationLinearizer() if MODE.startswith("AL") else II.PiecewiseLinearUnitV1())
         
     
     def call(self, input):
@@ -116,6 +116,8 @@ strat = tf.distribute.MirroredStrategy()
 print('\tUsing {} devices'.format(strat.num_replicas_in_sync))
 
 with strat.scope():
+    f_actC = layers.Activation('sigmoid') if MODE == "Control" else layers.Activation("tanh")
+    f_actA = II.ActivationLinearizer("sigmoid") if MODE == "AL(Sig)" else II.ActivationLinearizer("tanh")
     LAMP_Model = models.Sequential([
         layers.BatchNormalization(input_shape=INPUT_SIZE),
 
@@ -125,13 +127,16 @@ with strat.scope():
 
         layers.Flatten(),
         layers.Dense(OUTPUT_SIZE),
-        layers.Activation('sigmoid') if MODE == "Control" else II.ActivationLinearizer("sigmoid"), #layers.Activation("tanh") as recommended
+        f_actC if MODE.startswith("Control") else (f_actA if MODE.startswith("AL") else II.PiecewiseLinearUnitV1()), #layers.Activation("tanh") as recommended
         layers.Reshape((OUTPUT_SIZE, 1)),
     ])
 
     #metrics_to_use = ['accuracy']
 
-#LAMP_Model.summary()
+LAMP_Model.summary()
+
+if MODE.startswith("AL"):
+    print("{} init".format(LAMP_Model.layers[6].initialization))
 
 #"""
 print("\nTraining model {}".format(MODE))
