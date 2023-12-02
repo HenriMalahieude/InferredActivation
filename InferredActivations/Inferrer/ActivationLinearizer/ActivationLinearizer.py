@@ -4,11 +4,11 @@ from .LinearBounds import OuterBoundUnlocked, InnerBoundUnlocked
 from .AL_Activators import *
 from keras import layers
 
-
 TEMP_INF = 100000000
 #NOTE: pwlParams is organized where [slope, bias, slope2, bias2, ..., etc]
 #NOTE: bounds is organized where [b1, b2, b3, ..., etc] and are simple floats marking boundaries
 
+#NOTE: These contraints were an attempt at fixing a NaN issue in transformers, they didn't work
 class SingleValueMinMax(tf.keras.constraints.Constraint):
     def __init__(self, min_value, max_value):
         self.min = min_value
@@ -71,8 +71,8 @@ class ActivationLinearizer(layers.Layer):
         return ActivationLinearizer(config["initialization"], config["pw_count"], config["left_bound"], config["right_bound"], config["center_offset"], config["maximum_interval_length"])
 
     def build(self, input_shape):
-        self.bounds = self.add_weight(shape=(self.pw_count-1,), initializer='ones', trainable=True)#, constraint=NoNaNConstraintWrapper(SingleValueMinMax(-1 * TEMP_INF, TEMP_INF)))
-        self.pwlParams = self.add_weight(shape=(self.pw_count*2,), initializer='ones', trainable=True)#, constraint=NoNaNConstraintWrapper(SingleValueMinMax(-1 * TEMP_INF, TEMP_INF)))
+        self.bounds = self.add_weight(name="bounds", shape=(self.pw_count-1,), initializer='ones', trainable=True)#, constraint=NoNaNConstraintWrapper(SingleValueMinMax(-1 * TEMP_INF, TEMP_INF)))
+        self.pwlParams = self.add_weight(name="pwlParams", shape=(self.pw_count*2,), initializer='ones', trainable=True)#, constraint=NoNaNConstraintWrapper(SingleValueMinMax(-1 * TEMP_INF, TEMP_INF)))
 
         noted_bounds = np.linspace(self.left_bound, self.right_bound, self.pw_count-1) #Bounds could be an init param in a later iteration of AL
         self.set_weights([noted_bounds, np.random.randn(self.pw_count*2)])

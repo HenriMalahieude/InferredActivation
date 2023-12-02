@@ -117,7 +117,7 @@ then = time.time()
 squeeze_net.evaluate(val_data)
 print("Took: {}".format(str(int((time.time() - then) * 1000))))
 
-
+#NOTE: All accuracy here is wrong because TopK instead of SparseTopK
 #Control* ->  5.100s for 100% FVT5A,   0% FVT32A
 #       NOTE:w/o Data-Augmentation
 
