@@ -1,1 +1,1 @@
-from .ActivationLinearizer import ActivationLinearizer
+from .ActivationLinearizer import *
