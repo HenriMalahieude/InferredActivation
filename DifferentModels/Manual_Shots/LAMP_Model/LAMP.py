@@ -1,14 +1,14 @@
 import numpy as np
 import tensorflow as tf
 import InferredActivations.Inferrer as II
-import time
+from InferredActivations.Inferrer.ActivationLinearizer import OuterLockedBound, InnerLockedBound
 import scipy.io as sio
 from MPTimeSeriesGenerator import MPTimeseriesGenerator
 from keras import models, layers
 
 #2023 Rendition of https://github.com/zpzim/LAMP-ICDM2019
 
-EPOCHS = 30
+EPOCHS = 15
 BATCH_SIZE = 256
 AMOUNT_OF_INPUT_STREAMS = 1
 
@@ -20,8 +20,31 @@ OUTPUT_SIZE = 256
 INPUT_SIZE = (WINDOW_SIZE, AMOUNT_OF_INPUT_STREAMS, OUTPUT_SIZE + (LOOK_BEHIND + LOOK_AHEAD))
 DATASET_PATH = "LAMP_Datasets/LCCB_dataset.mat"
 
-MODE = "AL(Tanh)"
+MODE = "Control"
 assert MODE in ["Control", "Control(Tanh)", "PWLU", "AL(Sig)", "AL(Tanh)"] #TODO: PWLU and AL(Sig) and Control(Tanh)
+
+def ultra_fast_sigmoid(x): #Stolen directly from theano github, converted to tensor functions
+    x = 0.5 * x
+    # The if is a tanh approximate.
+    b1 = OuterLockedBound(x, -3, top=False)
+    b2 = InnerLockedBound(x, -3, -1.7)
+    b3 = InnerLockedBound(x, -1.7, 0)
+    b4 = InnerLockedBound(x, 0, 1.7)
+    b5 = InnerLockedBound(x, 1.7, 3)
+    b6 = OuterLockedBound(x, 3)
+
+    x1 = b1 * -0.99505475368673
+    x2 = b2 * (-0.935409070603099 + 0.0458812946797165 * (x + 1.7))
+    x3 = b3 * tf.math.divide_no_nan((1.5 * x), (1 - x))
+    x4 = b4 * tf.math.divide_no_nan((1.5 * x), (1 + x))
+    x5 = b5 * (0.935409070603099 + 0.0458812946797165 * (x - 1.7))
+    x6 = b6 * 0.99505475368673
+
+    z = x1 + x2 + x3 + x4 + x5 + x6 #each element should be mutually exclusive so only one operation per element technically
+
+    return 0.5 * (z + 1.0) 
+
+final_control_act = II.fastexp512_act()
 
 print('Starting LAMP Sandbox with stats:')
 print("\tBatch Size: {}\n\tMP_Window Size: {}\n\t\tLook Ahead: {}\n\t\tLook Behind: {}".format(BATCH_SIZE, WINDOW_SIZE, LOOK_AHEAD, LOOK_BEHIND))
@@ -37,42 +60,11 @@ ts = np.array(all_data["ts_train"])
 mp_val = np.array(all_data["mp_val"])
 ts_val = np.array(all_data["ts_val"])
 
-"""
-if np.any(np.isnan(mp)):
-    raise ValueError("MP is NaN")
-
-if np.any(np.isnan(ts)):
-    raise ValueError("TS is NaN")
-
-if np.any(np.isnan(mp_val)):
-    raise ValueError("MP_VAL is NaN")
-
-if np.any(np.isnan(ts_val)):
-    raise ValueError("TS_VAL is NaN")
-
-print("\tNo NaN in Train/Validation Data")
-"""
-
 #Processed Generators
 train_data = MPTimeseriesGenerator(ts, mp, WINDOW_SIZE,
                                    batch_size=BATCH_SIZE, mp_window=WINDOW_SIZE, num_outputs=OUTPUT_SIZE, lookahead=(LOOK_AHEAD + OUTPUT_SIZE), lookbehind=LOOK_BEHIND, num_input_timeseries=AMOUNT_OF_INPUT_STREAMS)
 val_data = MPTimeseriesGenerator(ts_val, mp_val, WINDOW_SIZE,
                                  batch_size=BATCH_SIZE, mp_window=WINDOW_SIZE, num_outputs=OUTPUT_SIZE, lookahead=(LOOK_AHEAD + OUTPUT_SIZE), lookbehind=LOOK_BEHIND, num_input_timeseries=AMOUNT_OF_INPUT_STREAMS)
-
-"""
-nan_batch = 0
-nan_count = []
-for x, y in train_data:
-    if np.any(np.isnan(x)) or np.any(np.isnan(y)):
-        nan_count.append(nan_batch)
-    
-    nan_batch += 1
-
-if len(nan_count) > 0:
-    print("Nan Batches ({}): ".format(nan_batch))
-    print(nan_count)
-    raise ValueError("Nans in Training")
-"""
 
 print("\nInitializing Building Block")
 class LAMP_ResNetBlock(layers.Layer):
@@ -116,7 +108,7 @@ strat = tf.distribute.MirroredStrategy()
 print('\tUsing {} devices'.format(strat.num_replicas_in_sync))
 
 with strat.scope():
-    f_actC = layers.Activation('sigmoid') if MODE == "Control" else layers.Activation("tanh")
+    f_actC = final_control_act if MODE == "Control" else layers.Activation("tanh")
     f_actA = II.ActivationLinearizer("sigmoid") if MODE == "AL(Sig)" else II.ActivationLinearizer("tanh")
     LAMP_Model = models.Sequential([
         layers.BatchNormalization(input_shape=INPUT_SIZE),
@@ -141,16 +133,11 @@ if MODE.startswith("AL"):
 #"""
 print("\nTraining model {}".format(MODE))
 LAMP_Model.compile(optimizer='adam', loss='mse')
-hist = LAMP_Model.fit(train_data, epochs=EPOCHS, validation_data=val_data)
+hist = LAMP_Model.fit(train_data, epochs=EPOCHS, validation_data=val_data)#, callbacks=[tf.keras.callbacks.TerminateOnNaN()])
 
 print(hist.history["loss"])
 print(hist.history["val_loss"])
 
-"""print("\n")
-
-then = time.time()
-LAMP_Model.evaluate(val_data)
-print("Took: {}ms".format(int((time.time() - then) * 1000)))"""
 #"""
 
 #3 Epochs, single top change
@@ -160,5 +147,5 @@ print("Took: {}ms".format(int((time.time() - then) * 1000)))"""
 #Piecewise Linear Unit T-Loss: 0.0025, V-Loss: 0.0041
 #Activation Linearizer T-Loss: 0.2038, V-Loss: 0.1810
 
-#Fully PLU             T-Loss: 0.0025, V-Loss: 0.0049
+#Fully PWLU             T-Loss: 0.0025, V-Loss: 0.0049
 #Fully AL              T-Loss: 0.2235, V-Loss: 0.4191 (Best was 0.1225, 0.1179)
