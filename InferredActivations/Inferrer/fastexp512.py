@@ -2,7 +2,7 @@ import tensorflow as tf
 from keras import layers
 
 class fastexp512_act(layers.Layer):
-	def __init__(self, n_init:int = 512, n_locked:bool = True):
+	def __init__(self, n_init:int = 8, n_locked:bool = True):
 		self.n_init = n_init
 		self.locked = n_locked
 		super(fastexp512_act, self).__init__()
@@ -29,4 +29,4 @@ class fastexp512_act(layers.Layer):
 			ii = tf.cast(i, dtype=minus_x.dtype)
 			exp = exp * tf.math.pow((1 + tf.math.divide_no_nan(minus_x, ii)), ii)
 
-		return 1 / (1 + exp)
+		return tf.math.divide_no_nan(1, (1 + exp))

@@ -9,7 +9,7 @@ from keras import models, layers
 #2023 Rendition of https://github.com/zpzim/LAMP-ICDM2019
 
 EPOCHS = 15
-BATCH_SIZE = 256
+BATCH_SIZE = 1024
 AMOUNT_OF_INPUT_STREAMS = 1
 
 WINDOW_SIZE = 16
@@ -133,7 +133,7 @@ if MODE.startswith("AL"):
 #"""
 print("\nTraining model {}".format(MODE))
 LAMP_Model.compile(optimizer='adam', loss='mse')
-hist = LAMP_Model.fit(train_data, epochs=EPOCHS, validation_data=val_data)#, callbacks=[tf.keras.callbacks.TerminateOnNaN()])
+hist = LAMP_Model.fit(train_data, epochs=EPOCHS, validation_data=val_data, callbacks=[tf.keras.callbacks.TerminateOnNaN()])
 
 print(hist.history["loss"])
 print(hist.history["val_loss"])
