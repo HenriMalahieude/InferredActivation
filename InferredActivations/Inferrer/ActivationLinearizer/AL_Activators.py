@@ -11,57 +11,70 @@ def MapLinearsBetween(y, x):
     return mp
 
 #I'm sure some function wrapping can make this simpler, but meh
-def InitAsSigmoid(self, noted_bounds):
+def InitAsSigmoid(self, x_arr):
     def Sigmoid(x):
         return 1 / (1 + np.exp(-1 * x))
     
     #self.set_weights([np.array([-6, -3.4, 0, 3.4, 6]), np.array([0, 0, 0.011, 0.071, 0.13705, 0.5, 0.13705, 0.5, 0.011, 0.929, 0, 1])])
-    points_to_map = Sigmoid(noted_bounds)
+    y_arr = Sigmoid(x_arr)
     vals = [0, 0]
-    vals.extend(MapLinearsBetween(points_to_map, noted_bounds))
+    vals.extend(MapLinearsBetween(y_arr, x_arr))
     vals.extend([0, 1])
 
     #print(vals)
-    self.set_weights([noted_bounds, np.array(vals)])
+    self.set_weights([x_arr, np.array(vals)])
 
 def Tanh(x):
     two_x = np.exp(2*x)
     return (two_x - 1) / (two_x + 1)
 
-def InitAsTanh(self, noted_bounds):
-    points_to_map = Tanh(noted_bounds)
+def InitAsTanh(self, x_arr):
+    y_arr = Tanh(x_arr)
     vals = [0, -1]
-    vals.extend(MapLinearsBetween(points_to_map, noted_bounds))
+    vals.extend(MapLinearsBetween(y_arr, x_arr))
     vals.extend([0, 1])
 
-    self.set_weights([noted_bounds, np.array(vals)])
+    self.set_weights([x_arr, np.array(vals)])
 
-def InitAsExp(self, noted_bounds):
-    points_to_map = np.exp(noted_bounds)
+def InitAsExp(self, x_arr):
+    y_arr = np.exp(x_arr)
     vals = [0, 0]
-    vals.extend(MapLinearsBetween(points_to_map, noted_bounds))
+    vals.extend(MapLinearsBetween(y_arr, x_arr))
     vals.extend(vals[-2:])
 
-    self.set_weights([noted_bounds, np.array(vals)])
+    self.set_weights([x_arr, np.array(vals)])
 
-def InitAsGelu(self, noted_bounds):
+def InitAsGelu(self, x_arr):
     def GELU(x):
         return (0.5 * x) * ( 1 + Tanh((((2 / math.pi) ** 0.5) * (x + (0.044715 * (x ** 3))))))
     
-    points_to_map = GELU(noted_bounds)
+    y_arr = GELU(x_arr)
     vals = [0, 0]
-    vals.extend(MapLinearsBetween(points_to_map, noted_bounds))
+    vals.extend(MapLinearsBetween(y_arr, x_arr))
     vals.extend([1, 0])
 
-    self.set_weights([noted_bounds, np.array(vals)])
+    self.set_weights([x_arr, np.array(vals)])
 
-def InitAsRelu(self, noted_bounds):
+def InitAsRelu(self, x_arr):
     vals = [0, 0]
-    for i in range(len(noted_bounds)-1):
-        if noted_bounds[i] < 0:
+    for i in range(len(x_arr)-1):
+        if x_arr[i] < 0:
             vals.extend([0,0])
         else:
             vals.extend([1,0])
     vals.extend([1, 0])
 
-    self.set_weights([noted_bounds, np.array(vals)])
+    self.set_weights([x_arr, np.array(vals)])
+
+def InitAsReLU6(self, x_arr):
+    vals = [0, 0]
+    for i in range(len(x_arr)-1):
+        if x_arr[i] < 0:
+            vals.extend([0, 0])
+        elif x_arr[i] >= 6:
+            vals.extend([0, 6])
+        else:
+            vals.extend([1, 0])
+    vals.extend([0, 6])
+
+    self.set_weights([x_arr, np.array(vals)])

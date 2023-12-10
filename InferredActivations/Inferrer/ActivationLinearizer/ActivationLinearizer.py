@@ -87,6 +87,8 @@ class ActivationLinearizer(layers.Layer):
             InitAsGelu(self, noted_bounds)
         elif self.initialization == 'relu':
             InitAsRelu(self, noted_bounds)
+        elif self.initialization == 'relu6':
+            InitAsReLU6(self, noted_bounds)
         elif self.initialization != 'random':
             print('ActivationLinearizer: initializer not implemented, defaulting to random')    
     
