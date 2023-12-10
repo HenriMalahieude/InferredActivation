@@ -8,9 +8,9 @@ from keras import layers, models
 
 logger = h.create_logger("shufflenetv2_dump.log")
 
-TYPE = "control"
-assert TYPE in ["control", "al"]
-BOTTLENECK_RATIO = 1
+TYPE = "pwlu"
+assert TYPE in ["control", "al", "pwlu"]
+BOTTLENECK_RATIO = 0.5
 SHUFFLE_BLOCKS = [3, 7, 3]
 SCALE_FACTOR = 1.0
 
@@ -20,9 +20,9 @@ AUGMENT_FACTOR = 0.1
 
 EPOCHS = 15
 INIT_LRATE = 0.01
-LRATE_SCHED = 30
+LRATE_SCHED = 6
 LRATE_RATIO = 0.1
-W_DECAY = 0.0000
+W_DECAY = 0.0
 MOMENTUM = 0.9
 
 IMAGE_SIZE = (224, 224)
@@ -42,7 +42,8 @@ print((
 	f'\n\t{MOMENTUM} SGD momentum'
 ))
 
-activation_to_use = layers.Activation if TYPE == 'control' else II.ActivationLinearizer
+activation_to_use = layers.Activation if TYPE == 'control' else (II.ActivationLinearizer if TYPE == "al" else II.PiecewiseLinearUnitV1)
+activation_arg = "relu" if TYPE != "pwlu" else 20
 
 print("\nPrepping CIFAR-10 Dataset")
 train_ds, val_ds = h.load_cifar10(BATCH_SIZE)
@@ -62,54 +63,61 @@ class ShuffleUnit(layers.Layer):
 
 	def build(self, input_shape): #NOTE: Expecting Channels Last
 		bottleneck_channels = int(self.out_channels * BOTTLENECK_RATIO)
-		height, width, channels = input_shape[-3:]
 
 		self.right = models.Sequential([
-			layers.Conv2D(bottleneck_channels, 1, strides=1, padding='same', input_shape=input_shape),
+			layers.Conv2D(bottleneck_channels, 1, strides=1, padding='same'),
 			layers.BatchNormalization(-1),
-			activation_to_use('relu'),
+			activation_to_use(activation_arg),
 			layers.DepthwiseConv2D(kernel_size=3, strides=self.strides, padding='same'),
 			layers.BatchNormalization(-1),
 			layers.Conv2D(bottleneck_channels, 1, strides=1, padding='same'),
 			layers.BatchNormalization(-1),
-			activation_to_use('relu')
+			activation_to_use(activation_arg)
 		])
 
-		if self.stride >= 2:
+		if self.strides >= 2:
 			self.left_on_stride2 = models.Sequential([
-				layers.DepthwiseConv2D(kernel_size=3, strides=2, padding='same', input_shape=input_shape),
+				layers.DepthwiseConv2D(kernel_size=3, strides=2, padding='same'),
 				layers.BatchNormalization(-1),
 				layers.Conv2D(bottleneck_channels, 1, strides=1, padding='same'),
 				layers.BatchNormalization(-1),
-				activation_to_use('relu')
+				activation_to_use(activation_arg)
 			])
 
-		#Next 3 lines of code taken almost stolen directly from that github
-		c_p_split = channels // 2
-
-		#for splitting the channels
-		self.c_hater = layers.Lambda(lambda z: z[:, :, :, 0:c_p_split])
-		self.c_er = layers.Lambda(lambda z: z[:, :, :, c_p_split:])
-
-		#NOTE: I'm betting that this fails, here are the results after testing: >>>>>
-		self.channel_shuffle = models.Sequential([
+		#NOTE: I'm betting that this fails, here are the results after testing: Guess what, it DID! but for another reason than I thought lmao
+		"""self.channel_shuffle = models.Sequential([
 			layers.Reshape([height, width, 2, c_p_split]), #NOTE: I'm betting this fails
 			layers.Permute((1, 2, 4, 3)), #Don't know why we switch from like (..., 2, 1) to (..., 1, 2) but I imagine it has to do with the reshape
 			layers.Reshape([height, width, channels])
-		])
+		])"""
+
+	#Expects channels last, returns c_hat, c
+	def channel_split(self, input):
+		channels = input.shape.as_list()[-1]
+		cp_split = channels // 2
+		return input[:, :, :, 0:cp_split], input[:, :, :, cp_split:]
+	
+	def channel_shuffle(self, input):
+		height, width, channels = input.shape.as_list()[-3:]
+		cp_split = channels // 2
+		x = layers.Reshape([height, width, 2, cp_split])(input)
+		x = layers.Permute((1,2,4,3))(x)
+		return layers.Reshape([height, width, channels])(x)
+
+
 
 	def call(self, input):
 		if self.strides < 2:
-			c_hat = self.c_hater(input)
-			input = self.c_er(input)
+			c_hat, c = self.channel_split(input)
+			input = c
 
 		r1 = self.right(input)
 
 		if self.strides < 2:
-			ret = layers.Concatenate(-1)([r1, c_hat]) #Keeps the same channel size
+			ret = layers.Concatenate(-1)([r1, c_hat])
 		else:
 			l1 = self.left_on_stride2(input)
-			ret = layers.Concatenate(-1)([r1, l1]) #Because of the striding, I'm not sure about the channel size anymore
+			ret = layers.Concatenate(-1)([r1, l1])
 
 		return self.channel_shuffle(ret)
 
@@ -150,13 +158,14 @@ with strat.scope():
 
 	shufflenetv2 = models.Sequential([
 		layers.Conv2D(24, 3, strides=2, padding='same', use_bias=False, input_shape=(*IMAGE_SIZE, 3)),
-		activation_to_use('relu'),
+		activation_to_use(activation_arg),
 		layers.MaxPool2D(3, 2),
 
+		#ShuffleBlock(out_channels_in_stage, repeat=SHUFFLE_BLOCKS[0], stage=2),
 		*[ShuffleBlock(out_channels_in_stage, repeat=SHUFFLE_BLOCKS[i], stage=i+2) for i in range(len(SHUFFLE_BLOCKS))],
 		
 		layers.Conv2D(1024 if BOTTLENECK_RATIO < 2 else 2048, 1, strides=1, padding='same'),
-		activation_to_use('relu'),
+		activation_to_use(activation_arg),
 		layers.GlobalMaxPooling2D(),
 		layers.Dense(10, activation="softmax"),
 	])
