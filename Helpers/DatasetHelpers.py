@@ -36,4 +36,4 @@ def load_cifar10(batch_size=8):
 	return train_ds, val_ds
 
 def report_dataset_size(name, dataset, batch_sz):
-	print("\t\t{} Images Loaded for {}".format(dataset.cardinality() * batch_sz, name))
+	print("\t{} Images prepared for {}".format(dataset.cardinality() * batch_sz, name))
