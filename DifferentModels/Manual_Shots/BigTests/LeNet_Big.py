@@ -5,9 +5,9 @@ from keras import layers, models
 
 logger = h.create_logger("lenet_big_dump.log")
 
-TYPE = "control"
+TYPE = "al"
 assert TYPE in ["control", "pwlu", "al"]
-AUGMENT_FACTOR = 0.1
+AUGMENT_FACTOR = 0.25
 CONCAT_AUG = True
 
 BATCH_SIZE = 128 #if TYPE == "control" else 64#(64 if TYPE == "al" else 32)
@@ -89,9 +89,9 @@ with strat.scope():
 		tf.keras.callbacks.LearningRateScheduler(h.lr_schedule_creator(LRATE_SCHED, LRATE_RATIO))
 	]
 
-lesnet.summary()
+#lesnet.summary()
 
-"""print(f"\nStarting {TYPE} training")
+print(f"\nStarting {TYPE} training")
 lesnet.compile(optim, loss=tf.keras.losses.SparseCategoricalCrossentropy(), metrics=metrics_to_use)
 hist = lesnet.fit(train_ds, epochs=EPOCHS, validation_data=val_ds, callbacks=calls)
 
