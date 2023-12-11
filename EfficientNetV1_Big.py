@@ -1,29 +1,28 @@
-#Locking this to the EfficientNetV2-S model found in: https://arxiv.org/pdf/2104.00298.pdf
 import tensorflow as tf
 import InferredActivations.Inferrer as II
 import Helpers as h
 from keras import layers, models
 
-logger = h.create_logger("efficient_net_v2_dump.log")
+logger = h.create_logger("efficient_net_v1_dump.log")
 
 TYPE = "control"
 assert TYPE in ["control", "pwlu", "al"]
 AUGMENT_FACTOR = 0.2
 CONCAT_AUG = True
 
-BATCH_SIZE = 64 if TYPE == "control" else (32 if TYPE == "al" else 16)
+BATCH_SIZE = 128 if TYPE == "control" else (64 if TYPE == "al" else 32)
 EPOCHS = 15
-INIT_LRATE = 0.1
-LRATE_SCHED = 5
+INIT_LRATE = 0.01
+LRATE_SCHED = 30
 LRATE_RATIO = 0.1
 
 W_DECAY = 0.0
 MOMENTUM = 0.9
-DROPOUT = 0.2 #Halfway between min and max (see Table 6)
-IMAGE_SIZE = (198, 198) #Exactly halfway between min and max image size that they used (Table 6)
+DROPOUT = 0.2 #As states by paper
+IMAGE_SIZE = (224, 224) #as stated by the paper
 
 print((
-	'Beginning efficient net v2 testing!'
+	'Beginning efficient net v1-b0 testing!'
 	f'\n\t{TYPE} type'
 	#f'\n\t{BOTTLENECK_RATIO} bottleneck ratio'
 	#f'\n\t{SHUFFLE_BLOCKS} shuffle blocks'
@@ -52,7 +51,7 @@ val_ds = h.prepare_dataset(val_ds, IMAGE_SIZE)
 h.report_dataset_size("Validation", val_ds, BATCH_SIZE)
 
 #Holy fuck thank god for https://github.com/GdoongMathew/EfficientNetV2/blob/master/efficientnetv2/model.py
-print("\nDefining Efficient Net Layers")
+print("\nDefining Efficient Net Layer")
 class MBConv(layers.Layer):
 	def __init__(self, scale_factor, kernel_size, output_channels, se_factor = 0, stride=1, version="normal"):
 		super(MBConv, self).__init__()
@@ -130,36 +129,37 @@ class MBConv(layers.Layer):
 			return s3 + input
 		
 		return s3
-
-
-print(f"\nDefining Model: {TYPE}")
+	
+print(f"\nDefining {TYPE} Efficient Net V1-B0")
 strat = tf.distribute.MirroredStrategy()
 print(f"\tUsing {strat.num_replicas_in_sync} GPUs")
 
 with strat.scope():
 	optim = tf.keras.optimizers.experimental.SGD(INIT_LRATE, MOMENTUM, weight_decay=(W_DECAY if W_DECAY > 0 else None))
 
-	efficient_net_v2_s = models.Sequential([
-		layers.Conv2D(24, 3, strides=2, input_shape=(*IMAGE_SIZE, 3)),
+	effnetv1_b0 = models.Sequential([
+		layers.Conv2D(32, 3, padding='same', input_shape=(*IMAGE_SIZE, 3)),  #224 x 224
 		layers.BatchNormalization(-1),
-		act_to_use(act_arg),
-		*[MBConv(1, 3, 24, version="fused") for _ in range(2)], #4r
+		act_to_use(act_arg), 
 
-		MBConv(4, 3, 48, stride=2, version='fused'),            #1r
-		*[MBConv(4, 3, 48, version="fused") for _ in range(3)], #3r
+		MBConv(1, 3, 16, stride=2),
 
-		MBConv(4, 3, 64, stride=2, version="fused"),            #1r
-		*[MBConv(4, 3, 64, version="fused") for _ in range(3)], #3r
+		*[MBConv(6, 3, 24) for _ in range(2)],
 
-		MBConv(4, 3, 128, se_factor=0.25, stride=2),            #(3r + 1s)
-		*[MBConv(4, 3, 128, se_factor=0.25) for _ in range(5)], #(15r + 5s)
+		MBConv(6, 5, 40, stride=2),
+		MBConv(6, 5, 40),
 
-		*[MBConv(6, 3, 160, se_factor=0.25) for _ in range(9)],	#(27r + 9s)
+		MBConv(6, 3, 80, stride=2),
+		*[MBConv(6, 3, 80) for _ in range(2)],
 
-		MBConv(6, 3, 256, se_factor=0.25, stride=2),            #(3r + 1s)
-		*[MBConv(6, 3, 256, se_factor=0.25) for _ in range(14)],#(3r + 1s) * 14
+		MBConv(6, 5, 112, stride=2),
+		*[MBConv(6, 5, 112) for _ in range(2)],
 
-		layers.Conv2D(1280, 1, padding='same', use_bias=False),
+		*[MBConv(6, 5, 192) for _ in range(4)],
+
+		MBConv(6, 3, 320, stride=2),
+
+		layers.Conv2D(1280, 1),
 		layers.BatchNormalization(-1),
 		act_to_use(act_arg),
 
@@ -180,11 +180,11 @@ with strat.scope():
 		tf.keras.callbacks.LearningRateScheduler(h.lr_schedule_creator(LRATE_SCHED, LRATE_RATIO))
 	]
 
-#efficient_net_v2_s.summary()
+#effnetv1_b0.summary()
 
 print(f"\nStarting {TYPE} training")
-efficient_net_v2_s.compile(optim, loss=tf.keras.losses.SparseCategoricalCrossentropy(), metrics=metrics_to_use)
-hist = efficient_net_v2_s.fit(train_ds, epochs=EPOCHS, validation_data=val_ds, callbacks=calls)
+effnetv1_b0.compile(optim, loss=tf.keras.losses.SparseCategoricalCrossentropy(), metrics=metrics_to_use)
+hist = effnetv1_b0.fit(train_ds, epochs=EPOCHS, validation_data=val_ds, callbacks=calls)
 
 h.output_training_history(logger, hist)
 h.output_validation_history(logger, hist)#"""
