@@ -15,7 +15,7 @@ from keras import layers#, initializers
 @tf.keras.saving.register_keras_serializable('InferredActivation')
 class PiecewiseLinearUnitV1(layers.Layer):
 	def __init__(self, n=5, momentum=0.9):
-		super(PiecewiseLinearUnitV2, self).__init__()
+		super(PiecewiseLinearUnitV1, self).__init__()
 		self.N = n
 		
 		self.running_avg = 0
@@ -26,7 +26,7 @@ class PiecewiseLinearUnitV1(layers.Layer):
 	def get_config(self):
 		base_config = super().get_config()
 		config = {
-			"n": self.max_n,
+			"n": self.N,
 			"running_avg": self.running_avg,
 			"running_std": self.running_std,
 			"momentum": self.momentum,
@@ -44,10 +44,10 @@ class PiecewiseLinearUnitV1(layers.Layer):
 	def build(self, input_shape):
 		self.Bounds = self.add_weight(shape=(2,), initializer='one', trainable=True)
 		self.BoundSlope = self.add_weight(shape=(2,), initializer='one', trainable=True)
-		self.nheight = self.add_weight(shape=(self.max_n+1,), initializer='one', trainable=True)
+		self.nheight = self.add_weight(shape=(self.N,), initializer='one', trainable=True)
 
 		#Start as a ReLU, though there can be more options tried
-		self.set_weights([np.array([-3, 3]), np.array([0, 1]), np.linspace(start=0, stop=6, num=self.max_n+1)]) #np.random.random_sample(size=(self.max_n+1,))
+		self.set_weights([np.array([-10, 10]), np.array([0, 1]), np.linspace(start=0, stop=10, num=self.N)]) #np.random.random_sample(size=(self.N+1,))
 	
 	def call(self, inputs):
 
@@ -68,7 +68,7 @@ class PiecewiseLinearUnitV1(layers.Layer):
 		Kr, Kl = self.BoundSlope[1], self.BoundSlope[0]
 
 		interval_length = (Br - Bl) / intervals
-
+	
 		#This is the index tensor which will be indexing the self.nheight params...
 		idx_tensor = tf.math.floor(tf.math.divide(inputs - Bl, interval_length))
 		Bidx_tensor = idx_tensor * interval_length + Bl
@@ -120,21 +120,14 @@ class PiecewiseLinearUnitV1(layers.Layer):
 		if before and not self.collect_stats: #Meaning we've ended our stats collection phase
 			Bl_stat = self.running_avg - 3 * self.running_std
 			Br_stat = self.running_avg + 3 * self.running_std
-			self.set_weights([np.array([Bl_stat , Br_stat]), np.array([0, 1]), np.linspace(start=Bl_stat, stop=Br_stat, num=self.max_n+1)])
+			self.set_weights([np.array([Bl_stat , Br_stat]), np.array([0, 1]), np.linspace(start=Bl_stat, stop=Br_stat, num=self.N+1)])
 			print("\nRunning Mean: " + str(self.running_avg))
 			print("Running Deviation: " + str(self.running_std))
-
-	def ToggleBoundaryLock(self, forceTo=None):
-		if forceTo != None and type(forceTo) is bool:
-			self.boundary_lock = forceTo
-			return
-		
-		self.boundary_lock = not self.boundary_lock
 
 #This one has parameter growth
 class PiecewiseLinearUnitV2(layers.Layer):
 	def __init__(self, max_params=20, interval_start=5, momentum=0.9):
-		super(PiecewiseLinearUnitV1, self).__init__()
+		super(PiecewiseLinearUnitV2, self).__init__()
 		self.max_n = max(max_params, 10)
 		self.N_start = max(min(int(interval_start), 20), 3)
 		
