@@ -5,7 +5,7 @@ from keras import layers, models
 
 logger = h.create_logger("lenet_big_dump.log")
 
-TYPE = "al"
+TYPE = "control"
 assert TYPE in ["control", "pwlu", "al"]
 AUGMENT_FACTOR = 0.25
 CONCAT_AUG = True
@@ -22,7 +22,7 @@ MOMENTUM = 0.9
 IMAGE_SIZE = (128, 128)
 
 print((
-	'Beginning efficient net v1-b0 testing!'
+	'Beginning LeNet testing!'
 	f'\n\t{TYPE} type'
 	#f'\n\t{BOTTLENECK_RATIO} bottleneck ratio'
 	#f'\n\t{SHUFFLE_BLOCKS} shuffle blocks'
@@ -38,7 +38,7 @@ print((
 ))
 
 act_to_use = layers.Activation if TYPE == 'control' else (II.ActivationLinearizer if TYPE == "al" else II.PiecewiseLinearUnitV1)
-act_arg = "relu" if TYPE != "pwlu" else 20
+act_arg = "relu" if TYPE != "pwlu" else 5
 
 print("\nPrepping CIFAR-10 Dataset")
 train_ds, val_ds = h.load_cifar10(BATCH_SIZE)

@@ -5,16 +5,16 @@ import logging
 
 from keras import layers, models
 
-MODEL_T = "PWLU" #control vs PWLU vs AL
+MODEL_T = "control" #control vs PWLU vs AL
 DROPOUT = 0.5
 
-DATASET = "imagenette" #imagenette vs cifar-10 vs imagenet2012
+DATASET = "cifar-10" #imagenette vs cifar-10 vs imagenet2012
 BATCH_SIZE = 4 #cifar-10 128/16, imagenette 16/4, imagenet2012 8/4
 AUGMENT = True
 CONCAT_AUG = True
 AUGMENT_FACTOR = 0.11
 
-EPOCHS = 20
+EPOCHS = 15
 INIT_LRATE = 0.04 #0.04 according to paper github
 LRATE_SCHED = 5 #Could not locate the schedule they used
 LRATE_RATIO = 0.1#`                                     `

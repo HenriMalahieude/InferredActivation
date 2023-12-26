@@ -8,7 +8,7 @@ from keras import layers, models
 
 logger = h.create_logger("shufflenetv2_dump.log")
 
-TYPE = "pwlu"
+TYPE = "control"
 assert TYPE in ["control", "al", "pwlu"]
 BOTTLENECK_RATIO = 0.5
 SHUFFLE_BLOCKS = [3, 7, 3]
@@ -43,7 +43,7 @@ print((
 ))
 
 activation_to_use = layers.Activation if TYPE == 'control' else (II.ActivationLinearizer if TYPE == "al" else II.PiecewiseLinearUnitV1)
-activation_arg = "relu" if TYPE != "pwlu" else 20
+activation_arg = "relu" if TYPE != "pwlu" else 5
 
 print("\nPrepping CIFAR-10 Dataset")
 train_ds, val_ds = h.load_cifar10(BATCH_SIZE)

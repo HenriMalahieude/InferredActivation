@@ -16,7 +16,7 @@ logger.addHandler(fileHandle)
 
 print("Beginning Squeeze/Excitation Network Sandbox 2")
 
-DATASET = "imagenette"
+DATASET = "cifar-10"
 assert DATASET in ["imagenette", "cifar-10", "imagenet2012"]
 AUGMENT_DATA = True
 CONCAT_AUG = True
@@ -30,8 +30,8 @@ REDUCTION_RATIO = 16 #16 as paper says
 
 print("\t{} version\n\t\tw/ {} Reduction Ratio".format(MODEL_T, REDUCTION_RATIO))
 
-BATCH_SZ = 8 #cifar-10 128, imagenette 8, imagenet2012 16
-MAX_EPOCH = 20
+BATCH_SZ = 16 #cifar-10 128, imagenette 8, imagenet2012 16
+MAX_EPOCH = 15
 
 #Using Learning Rate Scheduler
 INIT_LRATE = 0.01 #0.6 initial by paper
