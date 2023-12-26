@@ -40,8 +40,8 @@ print((
 ))
 
 act_to_use = layers.Activation if TYPE == 'control' else (II.ActivationLinearizer if TYPE == "al" else II.PiecewiseLinearUnitV1)
-act_arg1 = "relu" if TYPE != "pwlu" else 20
-act_arg2 = "relu6" if TYPE != "pwlu" else 10
+act_arg1 = "relu" if TYPE != "pwlu" else 5
+act_arg2 = "relu6" if TYPE != "pwlu" else 5
 
 print("\nPrepping CIFAR-10 Dataset")
 train_ds, val_ds = h.load_cifar10(BATCH_SIZE)
