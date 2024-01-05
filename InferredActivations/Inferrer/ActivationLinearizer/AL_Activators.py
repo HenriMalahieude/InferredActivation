@@ -78,3 +78,13 @@ def InitAsReLU6(self, x_arr):
     vals.extend([0, 6])
 
     self.set_weights([x_arr, np.array(vals)])
+
+def InitAsShiftReLU(self, x_arr, shift=-10):
+    vals = []
+    for i in range(len(x_arr)):
+        if x_arr[i] <= shift:
+            vals.extend([0, 0])
+        else:
+            vals.extend([1, shift*-1])
+
+    self.set_weights([x_arr, np.array(vals)])
