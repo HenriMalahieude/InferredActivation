@@ -46,8 +46,8 @@ class PiecewiseLinearUnitV1(layers.Layer):
 		self.BoundSlope = self.add_weight(shape=(2,), initializer='one', trainable=True)
 		self.nheight = self.add_weight(shape=(self.N,), initializer='one', trainable=True)
 
-		#Start as a ReLU, though there can be more options tried
-		self.set_weights([np.array([-10, 10]), np.array([0, 1]), np.linspace(start=0, stop=10, num=self.N)]) #np.random.random_sample(size=(self.N+1,))
+		#What I thought was ReLU was not ReLU
+		self.set_weights([np.array([-10, 10]), np.array([0, 1]), np.maximum(np.linspace(start=-10, stop=10, num=self.N), 0)])
 	
 	def call(self, inputs):
 
@@ -261,3 +261,93 @@ class PiecewiseLinearUnitV2(layers.Layer):
 			return
 		
 		self.boundary_lock = not self.boundary_lock
+
+class NonUniform_PiecewiseLinearUnit(layers.Layer):
+	def __init__(self, n=5, momentum=0.9):
+		super(PiecewiseLinearUnitV1, self).__init__()
+		self.N = n
+		
+		self.running_avg = 0
+		self.running_std = 1
+		self.momentum = momentum
+		self.collect_stats = False
+
+	def build(self, input_shape):
+		self.Bounds = self.add_weight(shape=(2,), initializer='one', trainable=True)
+		self.BoundSlope = self.add_weight(shape=(2,), initializer='one', trainable=True)
+		self.nheight = self.add_weight(shape=(self.N,), initializer='one', trainable=True)
+		self.ratio_points = self.add_weight(shape=(self.N-1,), initializer='one', trainable=True)
+
+		#What I thought was ReLU was not ReLU
+		self.set_weights([np.array([-10, 10]), np.array([0, 1]), np.maximum(np.linspace(start=-10, stop=10, num=self.N), 0), np.full(shape=(self.N-1,), fill_value=1)])
+	
+	def call(self, inputs):
+		if self.collect_stats:
+			avg = tf.math.reduce_mean(inputs)
+			std = tf.math.reduce_std(inputs) #TODO: Rewrite this to avoid "eager execution"
+
+			self.running_avg = (self.running_avg * self.momentum) + (1 - self.momentum) * avg.numpy()
+			self.running_std = (self.running_std * self.momentum) + (1 - self.momentum) * std.numpy()
+
+			#Default to ReLU while stats are collected
+			b1 = tf.cast(tf.math.greater(inputs, 0.0), dtype=inputs.dtype)
+
+			return b1 * inputs
+
+		def ymxb(m, x, x1, y1):
+			return m*x + tf.math.divide_no_nan(y1, m * x1)
+
+		Br, Bl = self.Bounds[1], self.Bounds[0]
+		Kr, Kl = self.BoundSlope[1], self.BoundSlope[0]
+
+		interval_base = (Br - Bl)
+		interval_ratios = tf.nn.softmax(self.ratio_points)
+
+		bounds = [Bl]
+		for i in tf.range(self.N-1):
+			bounds.extend([bounds[i] + (interval_base*interval_ratios[i])])
+
+		bound = tf.cast(tf.math.less_equal(inputs, Bl), dtype=inputs.dtype)
+		using = bound * inputs
+		final_sum = ymxb(Kl, using, Bl, self.nheight[0])
+
+		for i in tf.range(len(bounds)-1):
+			fbound = bounds[i]
+			tbound = bounds[i+1]
+			bound = tf.cast(tf.math.logical_and(tf.math.less_equal(inputs, tbound), tf.math.greater(inputs, fbound)), dtype=inputs.dtype)
+			using = bound * inputs
+			slope = (self.nheight[i+1] - self.nheight[i]) / (tbound - fbound)
+			final_sum += ymxb(slope, using, fbound, self.nheight[i])
+
+		bound = tf.cast(tf.math.greater(inputs, Br), dtype=inputs.dtype)
+		using = bound * inputs
+		final_sum += ymxb(Kr, using, Br, self.nheight[self.N-1])
+	
+		return final_sum
+	
+	def Extract(self):
+		print("Boundary Info:\n", 
+			"Bl = " + str(self.Bounds[0].numpy()), "w/slope=", str(self.BoundSlope[0].numpy()), "\n",
+			"Br = " + str(self.Bounds[1].numpy()), "w/slope=", str(self.BoundSlope[1].numpy()), "\n")
+		
+		print("All Heights (Interval Count = " + str(self.N) + "): ")
+		m = " "
+		for i in range(int(self.N + 1)):
+			m = m + str(self.nheight[i].numpy()) + ", "
+		
+		print(m)
+
+	def StatisticalAnalysisToggle(self, forceTo=None):
+		before = self.collect_stats
+		if forceTo != None and type(forceTo) is bool:
+			self.collect_stats = forceTo
+			return
+		else:
+			self.collect_stats = not self.collect_stats
+
+		if before and not self.collect_stats: #Meaning we've ended our stats collection phase
+			Bl_stat = self.running_avg - 3 * self.running_std
+			Br_stat = self.running_avg + 3 * self.running_std
+			self.set_weights([np.array([Bl_stat , Br_stat]), np.array([0, 1]), np.linspace(start=Bl_stat, stop=Br_stat, num=self.N+1)])
+			print("\nRunning Mean: " + str(self.running_avg))
+			print("Running Deviation: " + str(self.running_std))
