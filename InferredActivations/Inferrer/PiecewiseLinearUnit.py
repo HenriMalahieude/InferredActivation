@@ -10,67 +10,48 @@ from keras import layers#, initializers
 
 	def __call__(self, shape, dtype=None, **kwargs):"""
 
+def tensor_clamp(tensor, min, max):
+	return tf.math.maximum(tf.math.minimum(tensor, max), min)
+
 #OG Paper: https://arxiv.org/abs/2104.03693
 #Referenced: https://github.com/MrGoriay/pwlu-pytorch/blob/main/PWLA.py
 @tf.keras.saving.register_keras_serializable('InferredActivation')
 class PiecewiseLinearUnitV1(layers.Layer):
-	def __init__(self, n=5, momentum=0.9):
+	def __init__(self, k=5, momentum=0.9, left=None, right=None):
+		assert (left is None and right is None) or (left < right)
 		super(PiecewiseLinearUnitV1, self).__init__()
-		self.N = n
 		
-		self.running_avg = 0
-		self.running_std = 1
+		self.K = k #NOTE: K is the amount of points, and not the amount of intervals
+		self.ravg = 0 if left is None else ((right - left) / 2)
+		self.rstd = 3.33 if left is None else ((right - self.ravg) / 3)
 		self.momentum = momentum
 		self.collect_stats = False
 
-	def get_config(self):
-		base_config = super().get_config()
-		config = {
-			"n": self.N,
-			"running_avg": self.running_avg,
-			"running_std": self.running_std,
-			"momentum": self.momentum,
-		}
-		return {**base_config, **config}
-
-	@classmethod
-	def from_config(cls, config):
-		lyr = PiecewiseLinearUnitV1(config["n"], config["momentum"])
-		lyr.running_avg = config["running_avg"]
-		lyr.running_std = config["running_std"]
-		lyr.collect_stats = False
-		return lyr
-
-	def build(self, input_shape):
-		self.Bounds = self.add_weight(shape=(2,), initializer='one', trainable=True)
+		#Since we don't need input_shape, we can easily build this here
+		self.Bounds = self.add_weight(shape=(2,), initializer='one', trainable=False)
 		self.BoundSlope = self.add_weight(shape=(2,), initializer='one', trainable=True)
-		self.nheight = self.add_weight(shape=(self.N,), initializer='one', trainable=True)
+		self.nheight = self.add_weight(shape=(self.K,), initializer='one', trainable=True)
 
-		#What I thought was ReLU was not ReLU
-		self.set_weights([np.array([-10, 10]), np.array([0, 1]), np.maximum(np.linspace(start=-10, stop=10, num=self.N), 0)])
-	
+		l = -10 if left is None else left
+		r = 10 if right is None else right
+		self.set_weights([np.array([l, r]), np.array([0, 1]), np.maximum(np.linspace(start=-10, stop=10, num=self.K), 0)])
+
 	def call(self, inputs):
-
+		#Has to be done during "call" of the layer or model. Can't be during evaluate() or fit(). Otherwise TensorFlow gets angry
 		if self.collect_stats:
-			avg = tf.math.reduce_mean(inputs)
-			std = tf.math.reduce_std(inputs) #TODO: Rewrite this to avoid "eager execution"
+			self.ravg = (self.ravg * self.momentum) + (1 - self.momentum) * tf.math.reduce_mean(inputs)
+			self.rstd = (self.rstd * self.momentum) + (1 - self.momentum) * tf.math.reduce_std(inputs)
 
-			self.running_avg = (self.running_avg * self.momentum) + (1 - self.momentum) * avg.numpy()
-			self.running_std = (self.running_std * self.momentum) + (1 - self.momentum) * std.numpy()
+			return tf.nn.relu(inputs)
 
-			#Default to ReLU while stats are collected
-			b1 = tf.cast(tf.math.greater(inputs, 0.0), dtype=inputs.dtype)
-
-			return b1 * inputs
-
-		intervals = self.N
+		intervals = self.K - 1
 		Br, Bl = self.Bounds[1], self.Bounds[0]
 		Kr, Kl = self.BoundSlope[1], self.BoundSlope[0]
 
 		interval_length = (Br - Bl) / intervals
 	
 		#This is the index tensor which will be indexing the self.nheight params...
-		idx_tensor = tf.math.floor(tf.math.divide(inputs - Bl, interval_length))
+		idx_tensor = tensor_clamp(tf.math.floor(tf.math.divide(inputs - Bl, interval_length)), 0, (self.K-1)) #can't have out of bounds
 		Bidx_tensor = idx_tensor * interval_length + Bl
 
 		#Oh my fucking god I wasn't ready for the bs from tensorflow
@@ -91,7 +72,7 @@ class PiecewiseLinearUnitV1(layers.Layer):
 		b3 = tf.cast(tf.math.logical_and(tf.math.greater_equal(inputs, Bl), tf.math.less(inputs, Br)), dtype=inputs.dtype)
 
 		l1 = (inputs - Bl) * Kl + self.nheight[0]
-		l2 = (inputs - Br) * Kr + tf.gather(self.nheight, tf.cast(intervals+1, dtype=tf.int32))
+		l2 = (inputs - Br) * Kr + self.nheight[-1]
 		l3 = (inputs - Bidx_tensor) * Kidx_tensor + Yidx0_tensor
 
 		#Holy shit that was convoluted
@@ -102,27 +83,31 @@ class PiecewiseLinearUnitV1(layers.Layer):
 			"Bl = " + str(self.Bounds[0].numpy()), "w/slope=", str(self.BoundSlope[0].numpy()), "\n",
 			"Br = " + str(self.Bounds[1].numpy()), "w/slope=", str(self.BoundSlope[1].numpy()), "\n")
 		
-		print("All Heights (Interval Count = " + str(self.N) + "): ")
+		print("All Heights (Interval Count = " + str(self.K) + "): ")
 		m = " "
-		for i in range(int(self.N + 1)):
+		for i in range(int(self.K + 1)):
 			m = m + str(self.nheight[i].numpy()) + ", "
 		
 		print(m)
+	
+	def GetStatInfo(self):
+		return self.ravg, self.rstd
 
 	def StatisticalAnalysisToggle(self, forceTo=None):
 		before = self.collect_stats
 		if forceTo != None and type(forceTo) is bool:
 			self.collect_stats = forceTo
-			return
 		else:
 			self.collect_stats = not self.collect_stats
 
 		if before and not self.collect_stats: #Meaning we've ended our stats collection phase
-			Bl_stat = self.running_avg - 3 * self.running_std
-			Br_stat = self.running_avg + 3 * self.running_std
-			self.set_weights([np.array([Bl_stat , Br_stat]), np.array([0, 1]), np.linspace(start=Bl_stat, stop=Br_stat, num=self.N+1)])
-			print("\nRunning Mean: " + str(self.running_avg))
-			print("Running Deviation: " + str(self.running_std))
+			avg, std = self.GetStatInfo()
+			dist = 3 * std
+
+			Bl_stat = avg - dist
+			Br_stat = avg + dist
+			self.set_weights([np.array([Bl_stat, Br_stat]), np.array([0, 1]), tf.math.maximum(tf.linspace(start=tf.math.minimum(Bl_stat, -0.1), stop=Br_stat, num=self.K), 0)])
+			#print(f"\nRunning Mean: {self.ravg}\n\tRunning StD: {self.rstd}")
 
 #This one has parameter growth
 class PiecewiseLinearUnitV2(layers.Layer):
