@@ -20,21 +20,21 @@ class PiecewiseLinearUnitV1(layers.Layer):
 	def __init__(self, k=5, momentum=0.9, left=None, right=None):
 		assert (left is None and right is None) or (left < right)
 		super(PiecewiseLinearUnitV1, self).__init__()
-		
+
 		self.K = k #NOTE: K is the amount of points, and not the amount of intervals
-		self.ravg = 0 if left is None else ((right - left) / 2)
-		self.rstd = 3.33 if left is None else ((right - self.ravg) / 3)
+		self.ravg = 0.0 if left is None else ((right - left) / 2.0)
+		self.rstd = (10.0/3) if left is None else ((right - self.ravg) / 3.0)
 		self.momentum = momentum
 		self.collect_stats = False
 
-		#Since we don't need input_shape, we can easily build this here
-		self.Bounds = self.add_weight(shape=(2,), initializer='one', trainable=False)
+	def build(self, input_shape):
+		self.Bounds = self.add_weight(shape=(2,), initializer='one', trainable=True)
 		self.BoundSlope = self.add_weight(shape=(2,), initializer='one', trainable=True)
 		self.nheight = self.add_weight(shape=(self.K,), initializer='one', trainable=True)
 
-		l = -10 if left is None else left
-		r = 10 if right is None else right
-		self.set_weights([np.array([l, r]), np.array([0, 1]), np.maximum(np.linspace(start=-10, stop=10, num=self.K), 0)])
+		l, r = self.ravg - (3*self.rstd), self.ravg + (3*self.rstd)
+		thing = [np.array([l, r]), np.array([0, 1]), np.maximum(np.linspace(start=l, stop=r, num=self.K), 0)]
+		self.set_weights(thing) #Defaults to ReLU init
 
 	def call(self, inputs):
 		#Has to be done during "call" of the layer or model. Can't be during evaluate() or fit(). Otherwise TensorFlow gets angry
