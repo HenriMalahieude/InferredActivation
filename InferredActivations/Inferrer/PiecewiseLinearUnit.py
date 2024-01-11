@@ -23,7 +23,7 @@ class PiecewiseLinearUnitV1(layers.Layer):
 
 		self.K = k #NOTE: K is the amount of points, and not the amount of intervals
 		self.ravg = 0.0 if left is None else ((right - left) / 2.0)
-		self.rstd = (10.0/3) if left is None else ((right - self.ravg) / 3.0)
+		self.rstd = 1.0 if left is None else ((right - self.ravg) / 3.0)
 		self.momentum = momentum
 		self.collect_stats = False
 
@@ -89,9 +89,6 @@ class PiecewiseLinearUnitV1(layers.Layer):
 			m = m + str(self.nheight[i].numpy()) + ", "
 		
 		print(m)
-	
-	def GetStatInfo(self):
-		return self.ravg, self.rstd
 
 	def StatisticalAnalysisToggle(self, forceTo=None):
 		before = self.collect_stats
@@ -101,11 +98,10 @@ class PiecewiseLinearUnitV1(layers.Layer):
 			self.collect_stats = not self.collect_stats
 
 		if before and not self.collect_stats: #Meaning we've ended our stats collection phase
-			avg, std = self.GetStatInfo()
-			dist = 3 * std
+			dist = 3 * self.rstd
 
-			Bl_stat = avg - dist
-			Br_stat = avg + dist
+			Bl_stat = self.ravg - dist
+			Br_stat = self.ravg + dist
 			self.set_weights([np.array([Bl_stat, Br_stat]), np.array([0, 1]), tf.math.maximum(tf.linspace(start=tf.math.minimum(Bl_stat, -0.1), stop=Br_stat, num=self.K), 0)])
 			#print(f"\nRunning Mean: {self.ravg}\n\tRunning StD: {self.rstd}")
 
@@ -248,91 +244,70 @@ class PiecewiseLinearUnitV2(layers.Layer):
 		self.boundary_lock = not self.boundary_lock
 
 class NonUniform_PiecewiseLinearUnit(layers.Layer):
-	def __init__(self, n=5, momentum=0.9):
-		super(PiecewiseLinearUnitV1, self).__init__()
-		self.N = n
+	def __init__(self, k=5, momentum=0.9):
+		super(NonUniform_PiecewiseLinearUnit, self).__init__()
+		self.K = k
 		
-		self.running_avg = 0
-		self.running_std = 1
+		self.ravg= 0
+		self.rstd = 1
 		self.momentum = momentum
 		self.collect_stats = False
 
 	def build(self, input_shape):
 		self.Bounds = self.add_weight(shape=(2,), initializer='one', trainable=True)
 		self.BoundSlope = self.add_weight(shape=(2,), initializer='one', trainable=True)
-		self.nheight = self.add_weight(shape=(self.N,), initializer='one', trainable=True)
-		self.ratio_points = self.add_weight(shape=(self.N-1,), initializer='one', trainable=True)
+		self.nheight = self.add_weight(shape=(self.K,), initializer='one', trainable=True)
+		self.ratio_points = self.add_weight(shape=(self.K-1,), initializer='one', trainable=True)
 
 		#What I thought was ReLU was not ReLU
-		self.set_weights([np.array([-10, 10]), np.array([0, 1]), np.maximum(np.linspace(start=-10, stop=10, num=self.N), 0), np.full(shape=(self.N-1,), fill_value=1)])
+		self.set_weights([np.array([-10, 10]), np.array([0, 1]), np.maximum(np.linspace(start=-10, stop=10, num=self.K), 0), np.full(shape=(self.K-1,), fill_value=1.0)])
 	
 	def call(self, inputs):
 		if self.collect_stats:
-			avg = tf.math.reduce_mean(inputs)
-			std = tf.math.reduce_std(inputs) #TODO: Rewrite this to avoid "eager execution"
+			self.ravg = (self.ravg * self.momentum) + (1 - self.momentum) * tf.math.reduce_mean(inputs)
+			self.rstd = (self.rstd * self.momentum) + (1 - self.momentum) * tf.math.reduce_std(inputs)
 
-			self.running_avg = (self.running_avg * self.momentum) + (1 - self.momentum) * avg.numpy()
-			self.running_std = (self.running_std * self.momentum) + (1 - self.momentum) * std.numpy()
-
-			#Default to ReLU while stats are collected
-			b1 = tf.cast(tf.math.greater(inputs, 0.0), dtype=inputs.dtype)
-
-			return b1 * inputs
+			return tf.nn.relu(inputs)
 
 		def ymxb(m, x, x1, y1):
-			return m*x + tf.math.divide_no_nan(y1, m * x1)
+			return m*x + (y1 - m*x1)
 
 		Br, Bl = self.Bounds[1], self.Bounds[0]
 		Kr, Kl = self.BoundSlope[1], self.BoundSlope[0]
 
-		interval_base = (Br - Bl)
+		interval_total = (Br - Bl)
 		interval_ratios = tf.nn.softmax(self.ratio_points)
 
-		bounds = [Bl]
-		for i in tf.range(self.N-1):
-			bounds.extend([bounds[i] + (interval_base*interval_ratios[i])])
+		boundo1 = tf.cast(tf.math.less_equal(inputs, Bl), dtype=inputs.dtype)
+		final_sum = ymxb(Kl, inputs, Bl, self.nheight[0]) * boundo1
 
-		bound = tf.cast(tf.math.less_equal(inputs, Bl), dtype=inputs.dtype)
-		using = bound * inputs
-		final_sum = ymxb(Kl, using, Bl, self.nheight[0])
+		fbound = Bl
+		tbound = Bl
 
-		for i in tf.range(len(bounds)-1):
-			fbound = bounds[i]
-			tbound = bounds[i+1]
-			bound = tf.cast(tf.math.logical_and(tf.math.less_equal(inputs, tbound), tf.math.greater(inputs, fbound)), dtype=inputs.dtype)
-			using = bound * inputs
+		for i in range(self.K-1):
+			#print(tbound)
+			fbound = tbound
+			tbound += interval_total*interval_ratios[i]
+			boundi = tf.cast(tf.math.logical_and(tf.math.less_equal(inputs, tbound), tf.math.greater(inputs, fbound)), dtype=inputs.dtype)
 			slope = (self.nheight[i+1] - self.nheight[i]) / (tbound - fbound)
-			final_sum += ymxb(slope, using, fbound, self.nheight[i])
+			final_sum += (ymxb(slope, inputs, fbound, self.nheight[i])) * boundi
 
-		bound = tf.cast(tf.math.greater(inputs, Br), dtype=inputs.dtype)
-		using = bound * inputs
-		final_sum += ymxb(Kr, using, Br, self.nheight[self.N-1])
+		boundo2 = tf.cast(tf.math.greater(inputs, Br), dtype=inputs.dtype)
+		final_sum += ymxb(Kr, inputs, Br, self.nheight[self.K-1]) * boundo2
 	
 		return final_sum
-	
-	def Extract(self):
-		print("Boundary Info:\n", 
-			"Bl = " + str(self.Bounds[0].numpy()), "w/slope=", str(self.BoundSlope[0].numpy()), "\n",
-			"Br = " + str(self.Bounds[1].numpy()), "w/slope=", str(self.BoundSlope[1].numpy()), "\n")
-		
-		print("All Heights (Interval Count = " + str(self.N) + "): ")
-		m = " "
-		for i in range(int(self.N + 1)):
-			m = m + str(self.nheight[i].numpy()) + ", "
-		
-		print(m)
 
 	def StatisticalAnalysisToggle(self, forceTo=None):
 		before = self.collect_stats
 		if forceTo != None and type(forceTo) is bool:
 			self.collect_stats = forceTo
-			return
 		else:
 			self.collect_stats = not self.collect_stats
 
 		if before and not self.collect_stats: #Meaning we've ended our stats collection phase
-			Bl_stat = self.running_avg - 3 * self.running_std
-			Br_stat = self.running_avg + 3 * self.running_std
-			self.set_weights([np.array([Bl_stat , Br_stat]), np.array([0, 1]), np.linspace(start=Bl_stat, stop=Br_stat, num=self.N+1)])
-			print("\nRunning Mean: " + str(self.running_avg))
-			print("Running Deviation: " + str(self.running_std))
+			dist = 3 * self.rstd
+
+			Bl_stat = self.ravg - dist
+			Br_stat = self.ravg + dist
+			self.set_weights([np.array([Bl_stat, Br_stat]), np.array([0, 1]), tf.math.maximum(tf.linspace(start=tf.math.minimum(Bl_stat, -0.1), stop=Br_stat, num=self.K), 0), np.full(shape=(self.K-1,), fill_value=1.0)])
+			#print(f"\nRunning Mean: {self.ravg}\n\tRunning StD: {self.rstd}")
