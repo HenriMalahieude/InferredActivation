@@ -1,20 +1,21 @@
 #Shout outs, shout outs to: https://github.com/opconty/keras-shufflenetV2/blob/master/utils.py
+import time
 import tensorflow as tf
 import numpy as np
 import InferredActivations.Inferrer as II
 import Helpers as h
-import logging
 from keras import layers, models
 
 logger = h.create_logger("shufflenetv2_dump.log")
 
-TYPE = "control"
-assert TYPE in ["control", "al", "pwlu"]
-BOTTLENECK_RATIO = 0.5
+TYPE = "pwlu"
+STATISTICS = True #PWLU Only
+assert TYPE in ["control", "al", "pwlu", "nupwlu"]
+BOTTLENECK_RATIO = 2
 SHUFFLE_BLOCKS = [3, 7, 3]
 SCALE_FACTOR = 1.0
 
-BATCH_SIZE = 128 #cifar-10 128/16, imagenette 16/4, imagenet2012 8/4
+BATCH_SIZE = 128 if TYPE == "control" else (64 if TYPE == "al" else 32)
 CONCAT_AUG = True
 AUGMENT_FACTOR = 0.1
 
@@ -35,15 +36,16 @@ print((
 	f'\n\n\t{BATCH_SIZE} batch size'
 	f'\n\t{AUGMENT_FACTOR} augment factor'
 	f'\n\tConcatenate Augment? {CONCAT_AUG}'
-	f'\n\n\t{EPOCHS} total epochs'
+	f'\n\n\t{EPOCHS} total epochs + Statistical Analysis Period (PWLU only)? {STATISTICS}'
 	f'\n\t{INIT_LRATE} initial learning rate'
 	f'\n\tLearning rate schedule of {LRATE_RATIO} ratio every {LRATE_SCHED} epochs'
 	f'\n\t{W_DECAY} weight decay'
 	f'\n\t{MOMENTUM} SGD momentum'
 ))
 
-activation_to_use = layers.Activation if TYPE == 'control' else (II.ActivationLinearizer if TYPE == "al" else II.PiecewiseLinearUnitV1)
-activation_arg = "relu" if TYPE != "pwlu" else 5
+pwlu_v = II.PiecewiseLinearUnitV1 if TYPE == "pwlu" else II.NonUniform_PiecewiseLinearUnit
+activation_to_use = layers.Activation if TYPE == 'control' else (II.ActivationLinearizer if TYPE == "al" else pwlu_v)
+activation_arg = "relu" if TYPE != "pwlu" and TYPE != "nupwlu" else 5
 
 print("\nPrepping CIFAR-10 Dataset")
 train_ds, val_ds = h.load_cifar10(BATCH_SIZE)
@@ -104,7 +106,13 @@ class ShuffleUnit(layers.Layer):
 		x = layers.Permute((1,2,4,3))(x)
 		return layers.Reshape([height, width, channels])(x)
 
+	def StatisticalAnalysisToggle(self, to):
+		assert TYPE == "pwlu" or TYPE == "nupwlu"
 
+		self.right.layers[2].StatisticalAnalysisToggle(to)
+		self.right.layers[7].StatisticalAnalysisToggle(to)
+		if self.strides >= 2:
+			self.left_on_stride2.layers[4].StatisticalAnalysisToggle(to)
 
 	def call(self, input):
 		if self.strides < 2:
@@ -138,6 +146,10 @@ class ShuffleBlock(layers.Layer):
 
 	def call(self, input):
 		return self.units(input)
+	
+	def StatisticalAnalysisToggle(self, to):
+		for i in range(len(self.units.layers)):
+			self.units.layers[i].StatisticalAnalysisToggle(to)
 
 print(f"\nDefining ShuffleNetV2 Type: {TYPE}")
 strat = tf.distribute.MirroredStrategy()
@@ -183,6 +195,16 @@ with strat.scope():
 
 print("\nStarting training")
 shufflenetv2.compile(optim, loss=tf.keras.losses.SparseCategoricalCrossentropy(), metrics=metrics_to_use)
+if (TYPE == "pwlu" or TYPE == "nupwlu") and STATISTICS:
+	h.PWLU_Set_StatisticalToggle(shufflenetv2, "ShuffleBlock", True)
+	print(f"\t\tBeginning Statistical Analysis")
+	tme = time.time()
+	for x, _ in train_ds:
+		shufflenetv2.call(x)
+	print(f"\t\tStatistics took {time.time() - tme}s to calculate")
+	h.PWLU_Set_StatisticalToggle(shufflenetv2, "ShuffleBlock", False)
+	
+
 hist = shufflenetv2.fit(train_ds, epochs=EPOCHS, validation_data=val_ds, callbacks=calls)
 
 h.output_training_history(logger, hist)

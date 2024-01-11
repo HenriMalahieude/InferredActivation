@@ -1,13 +1,14 @@
 import tensorflow as tf
 import InferredActivations.Inferrer as II
 import Helpers as h
+import time
 from keras import layers, models
 
 logger = h.create_logger("squeeze_bigtest_dump.log")
 
-TYPE = "pwlu"
+TYPE = "nupwlu"
 STATISTICS = True
-assert TYPE in ["control", "al", "pwlu"]
+assert TYPE in ["control", "al", "pwlu", "nupwlu"]
 DROPOUT = 0.5
 
 BATCH_SIZE = 128 if TYPE == "control" else (64 if TYPE == "al" else 32)
@@ -37,8 +38,9 @@ print((
     f'\n\t{MOMENTUM} SGD momentum'
 ))
 
-act_to_use = layers.Activation if TYPE == 'control' else (II.ActivationLinearizer if TYPE == "al" else II.PiecewiseLinearUnitV1)
-act_arg = "relu" if TYPE != "pwlu" else 5
+pwlu_v = II.PiecewiseLinearUnitV1 if TYPE == "pwlu" else II.NonUniform_PiecewiseLinearUnit
+act_to_use = layers.Activation if TYPE == 'control' else (II.ActivationLinearizer if TYPE == "al" else pwlu_v)
+act_arg = "relu" if TYPE != "pwlu" and TYPE != "nupwlu" else 5
 
 print("\nPrepping CIFAR-10 Dataset")
 train_ds, val_ds = h.load_cifar10(BATCH_SIZE)
@@ -76,7 +78,7 @@ class FireModule(layers.Layer):
         self.eThreeLayer.build(self.sLayer.compute_output_shape(input_shape))
 
     def StatisticalAnalysisToggle(self, to=None):
-        assert TYPE == "pwlu"
+        assert TYPE == "pwlu" or TYPE == "nupwlu"
 
         self.sLayer.layers[1].StatisticalAnalysisToggle(to)
         self.eOneLayer.layers[1].StatisticalAnalysisToggle(to)
@@ -131,13 +133,14 @@ with strat.scope():
 
 print(f"\nTraining Squeeze Net in {TYPE} conditions")
 squeeze_net.compile(optim, loss=tf.keras.losses.SparseCategoricalCrossentropy(), metrics=metrics_to_use)
-if STATISTICS and TYPE == "pwlu":
+if STATISTICS and (TYPE == "pwlu" or TYPE == "nupwlu"):
     print(f"\tBeginning Statistical Analysis Period")
     h.PWLU_Set_StatisticalToggle(squeeze_net, "FireModule", True)
     print(f"\t\tRunning Statistical Analysis")
-    #squeeze_net.evaluate(train_ds)
+    tme = time.time()
     for x, y in train_ds:
         squeeze_net.call(x)
+    print(f"\t\tStatistics took {time.time() - tme}s to calculate!")
     h.PWLU_Set_StatisticalToggle(squeeze_net, "FireModule", False)
 
 hist = squeeze_net.fit(train_ds, epochs=EPOCHS, validation_data=val_ds, callbacks=calls)
