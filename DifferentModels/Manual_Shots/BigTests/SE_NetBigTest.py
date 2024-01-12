@@ -42,8 +42,8 @@ print((
 
 pwlu_v = II.PiecewiseLinearUnitV1 if TYPE == "pwlu" else II.NonUniform_PiecewiseLinearUnit
 act_to_use = layers.Activation if TYPE == 'control' else (II.ActivationLinearizer if TYPE == "al" else pwlu_v)
-act_arg1 = "relu" if TYPE != "pwlu" else 5
-act_arg2 = "sigmoid" if TYPE != "pwlu" else 5
+act_arg1 = "relu" if TYPE != "pwlu" and TYPE != "nupwlu" else 5
+act_arg2 = "sigmoid" if TYPE != "pwlu" and TYPE != "nupwlu" else 5
 
 print("\nPrepping CIFAR-10 Dataset")
 train_ds, val_ds = h.load_cifar10(BATCH_SIZE)
@@ -109,7 +109,7 @@ class SE_ResidualBlock(layers.Layer):
         return self.final_pass((y * yy) + self.id_pass(input))
     
     def StatisticalAnalysisToggle(self, to):
-        assert TYPE == "pwlu"
+        assert TYPE == "pwlu" or TYPE == "nupwlu"
 
         self.normal_pass.layers[2].StatisticalAnalysisToggle(to)
         self.normal_pass.layers[5].StatisticalAnalysisToggle(to)
@@ -173,7 +173,7 @@ with strat.scope():
 
 print("\nStarting training")
 se_net.compile(optim, loss=tf.keras.losses.SparseCategoricalCrossentropy(), metrics=metrics_to_use)
-if TYPE == "pwlu" and STATISTICS:
+if (TYPE == "pwlu" or TYPE == "nupwlu") and STATISTICS:
     h.PWLU_Set_StatisticalToggle(se_net, "SE_ResidualBlock", True)
     print(f"\t\tBeginning Statistical Analysis!")
     tme = time.time()

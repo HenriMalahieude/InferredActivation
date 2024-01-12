@@ -39,8 +39,8 @@ print((
 
 pwlu_v = II.PiecewiseLinearUnitV1 if TYPE == "pwlu" else II.NonUniform_PiecewiseLinearUnit
 act_to_use = layers.Activation if TYPE == 'control' else (II.ActivationLinearizer if TYPE == "al" else pwlu_v)
-act_arg = "relu" if TYPE != "pwlu" else 5
-sig_arg = "sigmoid" if TYPE != 'pwlu' else 5
+act_arg = "relu" if TYPE != "pwlu" and TYPE != "nupwlu" else 5
+sig_arg = "sigmoid" if TYPE != "pwlu" and TYPE != "nupwlu" else 5
 
 print("\nPrepping CIFAR-10 Dataset")
 train_ds, val_ds = h.load_cifar10(BATCH_SIZE)
