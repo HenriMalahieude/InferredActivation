@@ -96,9 +96,9 @@ class MBConv(layers.Layer):
 				layers.GlobalAveragePooling2D(),
 				layers.Reshape((1, 1, channels)),
 				layers.Conv2D(reduced_channels, 1, padding='same'),
-				act_to_use(act_arg),
+				layers.Activation("relu"), #act_to_use(act_arg),
 				layers.Conv2D(channels, 1, padding='same'),
-				act_to_use(sig_arg),
+				layers.Activation("sigmoid"), #act_to_use(sig_arg),
 			])
 
 		self.procedure3 = models.Sequential([
