@@ -6,9 +6,9 @@ from keras import layers, models
 
 logger = h.create_logger("mobilenetv2_big_dump.log")
 
-TYPE = "pwlu"
+TYPE = "leaky"
 STATISTICS = True #pwlu types only
-assert TYPE in ["control", "pwlu", "al", "nupwlu"]
+assert TYPE in ["control", "pwlu", "al", "nupwlu", "shiftlu", "shiftleaky", "leaky", "prelu", "elu"]
 AUGMENT_FACTOR = 0.1
 CONCAT_AUG = True
 
@@ -41,7 +41,24 @@ print((
 pwlu_v = II.PiecewiseLinearUnitV1 if TYPE == "pwlu" else II.NonUniform_PiecewiseLinearUnit
 act_to_use = layers.Activation if TYPE == 'control' else (II.ActivationLinearizer if TYPE == "al" else pwlu_v)
 act_arg1 = "relu" if TYPE != "pwlu" and TYPE != "nupwlu" else 5
-act_arg2 = "relu" if TYPE != "pwlu" and TYPE != "nupwlu" else 5
+act_arg2 = "relu" if TYPE != "pwlu" and TYPE != "nupwlu" else 5 #normally should be relu6, but it's a minor difference
+
+if TYPE == "shiftlu" or TYPE == "shiftleaky":
+	act_to_use = II.ShiftReLU if TYPE == "shiftlu" else II.LeakyShiftReLU
+	act_arg1 = 0
+	act_arg2 = 0
+elif TYPE == "leaky":
+	act_to_use = layers.LeakyReLU
+	act_arg1 = 0.3
+	act_arg2 = 0.3
+elif TYPE == "prelu":
+	act_to_use = layers.PReLU
+	act_arg1 = 'zeros'
+	act_arg2 = 'zeros'
+elif TYPE == "elu":
+	act_to_use = layers.ELU
+	act_arg1 = 1.0
+	act_arg2 = 1.0
 
 print("\nPrepping CIFAR-10 Dataset")
 train_ds, val_ds = h.load_cifar10(BATCH_SIZE)

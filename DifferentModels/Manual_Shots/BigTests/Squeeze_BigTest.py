@@ -6,9 +6,9 @@ from keras import layers, models
 
 logger = h.create_logger("squeeze_bigtest_dump.log")
 
-TYPE = "nupwlu"
+TYPE = "shiftlu"
 STATISTICS = True
-assert TYPE in ["control", "al", "pwlu", "nupwlu"]
+assert TYPE in ["control", "pwlu", "al", "nupwlu", "shiftlu", "shiftleaky", "leaky", "prelu", "elu"]
 DROPOUT = 0.5
 
 BATCH_SIZE = 128 if TYPE == "control" else (64 if TYPE == "al" else 32)
@@ -41,6 +41,22 @@ print((
 pwlu_v = II.PiecewiseLinearUnitV1 if TYPE == "pwlu" else II.NonUniform_PiecewiseLinearUnit
 act_to_use = layers.Activation if TYPE == 'control' else (II.ActivationLinearizer if TYPE == "al" else pwlu_v)
 act_arg = "relu" if TYPE != "pwlu" and TYPE != "nupwlu" else 5
+
+if TYPE == "shiftlu":
+    act_to_use = II.ShiftReLU
+    act_arg = 0
+elif TYPE == "shiftleaky":
+    act_to_use = II.LeakyShiftReLU
+    act_arg = 0
+elif TYPE == "leaky":
+    act_to_use = layers.LeakyReLU
+    act_arg = 0.3
+elif TYPE == "prelu":
+    act_to_use = layers.PReLU
+    act_arg = 'zeros'
+elif TYPE == "elu":
+    act_to_use = layers.ELU
+    act_arg = 1.0
 
 print("\nPrepping CIFAR-10 Dataset")
 train_ds, val_ds = h.load_cifar10(BATCH_SIZE)
