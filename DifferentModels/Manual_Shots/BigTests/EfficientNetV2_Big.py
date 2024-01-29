@@ -9,11 +9,11 @@ logger = h.create_logger("efficient_net_v2_dump.log")
 
 TYPE = "pwlu"
 STATISTICS = True
-assert TYPE in ["control", "pwlu", "al", "nupwlu"]
+assert TYPE in ["control", "pwlu", "al", "nupwlu", "shiftlu", "shiftleaky", "leaky", "prelu", "elu"]
 AUGMENT_FACTOR = 0.2
 CONCAT_AUG = True
 
-BATCH_SIZE = 64 if TYPE == "control" else (32 if TYPE == "al" else 16)
+BATCH_SIZE = 128 #if TYPE == "control" else (32 if TYPE == "al" else 16)
 EPOCHS = 15
 INIT_LRATE = 0.1
 LRATE_SCHED = 5
@@ -41,7 +41,23 @@ print((
 pwlu_v = II.PiecewiseLinearUnitV1 if TYPE == "pwlu" else II.NonUniform_PiecewiseLinearUnit
 act_to_use = layers.Activation if TYPE == 'control' else (II.ActivationLinearizer if TYPE == "al" else pwlu_v)
 act_arg = "relu" if TYPE != "pwlu" and TYPE != "nupwlu" else 5
-sig_arg = "sigmoid" if TYPE != "pwlu" and TYPE != "nupwlu" else 5
+#sig_arg = "sigmoid" if TYPE != "pwlu" and TYPE != "nupwlu" else 5
+
+if TYPE == "shiftlu":
+    act_to_use = II.ShiftReLU
+    act_arg = 0
+elif TYPE == "shiftleaky":
+    act_to_use = II.LeakyShiftReLU
+    act_arg = 0
+elif TYPE == "leaky":
+    act_to_use = layers.LeakyReLU
+    act_arg = 0.3 
+elif TYPE == "prelu":
+    act_to_use = layers.PReLU
+    act_arg = 'zeros'
+elif TYPE == "elu":
+    act_to_use = layers.ELU
+    act_arg = 1.0
 
 print("\nPrepping CIFAR-10 Dataset")
 train_ds, val_ds = h.load_cifar10(BATCH_SIZE)
@@ -96,7 +112,7 @@ class MBConv(layers.Layer):
 				layers.GlobalAveragePooling2D(),
 				layers.Reshape((1, 1, channels)),
 				layers.Conv2D(reduced_channels, 1, padding='same'),
-				layers.Activation("relu"), #act_to_use(act_arg),
+				act_to_use(act_arg),
 				layers.Conv2D(channels, 1, padding='same'),
 				layers.Activation("sigmoid"), #act_to_use(sig_arg),
 			])

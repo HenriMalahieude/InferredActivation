@@ -7,13 +7,13 @@ from keras import layers, models
 #Setting up Logger
 logger = h.create_logger("squeeze_excitation_net_dump.log")
 
-TYPE = "pwlu"
+TYPE = "shiftlu"
 STATISTICS = True #PWLU only
-assert TYPE in ["control", "pwlu", "al", "nupwlu"]
+assert TYPE in ["control", "pwlu", "al", "nupwlu", "shiftlu", "shiftleaky", "leaky", "prelu", "elu"]
 AUGMENT_FACTOR = 0.1
 CONCAT_AUG = True
 
-BATCH_SIZE = 128 if TYPE == "control" else (64 if TYPE == "al" else 32)
+BATCH_SIZE = 128 #if TYPE == "control" else (64 if TYPE == "al" else 32)
 EPOCHS = 15
 REDUCTION_RATIO = 16 #16 as paper says
 
@@ -43,7 +43,23 @@ print((
 pwlu_v = II.PiecewiseLinearUnitV1 if TYPE == "pwlu" else II.NonUniform_PiecewiseLinearUnit
 act_to_use = layers.Activation if TYPE == 'control' else (II.ActivationLinearizer if TYPE == "al" else pwlu_v)
 act_arg1 = "relu" if TYPE != "pwlu" and TYPE != "nupwlu" else 5
-act_arg2 = "sigmoid" if TYPE != "pwlu" and TYPE != "nupwlu" else 5
+#act_arg2 = "sigmoid" if TYPE != "pwlu" and TYPE != "nupwlu" else 5
+
+if TYPE == "shiftlu":
+    act_to_use = II.ShiftReLU
+    act_arg1 = 0
+elif TYPE == "shiftleaky":
+    act_to_use = II.LeakyShiftReLU
+    act_arg1 = 0
+elif TYPE == "leaky":
+    act_to_use = layers.LeakyReLU
+    act_arg1 = 0.3
+elif TYPE == "prelu":
+    act_to_use = layers.PReLU
+    act_arg1 = 'zeros'
+elif TYPE == "elu":
+    act_to_use = layers.ELU
+    act_arg1 = 1.0
 
 print("\nPrepping CIFAR-10 Dataset")
 train_ds, val_ds = h.load_cifar10(BATCH_SIZE)
@@ -85,7 +101,7 @@ class SE_ResidualBlock(layers.Layer):
             layers.Dense(units=(f3/REDUCTION_RATIO), use_bias=False), #Rest of this is the "excitation layer"
             act_to_use(act_arg1),
             layers.Dense(units=f3, use_bias=False),
-            act_to_use(act_arg2),
+            layers.Activation('sigmoid'),
             layers.Reshape([1, 1, f3]) #So we can multiply to the input
         ])
 

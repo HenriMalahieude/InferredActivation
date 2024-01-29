@@ -42,6 +42,27 @@ act_to_use = layers.Activation if TYPE == 'control' else (II.ActivationLinearize
 act_arg1 = "relu" if TYPE != "pwlu" and TYPE != "nupwlu" else 5
 act_arg2 = "relu6" if TYPE != "pwlu" and TYPE != "nupwlu" else 5
 
+if TYPE == "shiftlu":
+    act_to_use = II.ShiftReLU
+    act_arg1 = 0
+    act_arg2 = 0
+elif TYPE == "shiftleaky":
+    act_to_use = II.LeakyShiftReLU
+    act_arg1 = 0
+    act_arg2 = 0
+elif TYPE == "leaky":
+    act_to_use = layers.LeakyReLU
+    act_arg1 = 0.3
+    act_arg2 = 0.3
+elif TYPE == "prelu":
+    act_to_use = layers.PReLU
+    act_arg1 = 'zeros'
+    act_arg2 = 'zeros'
+elif TYPE == "elu":
+    act_to_use = layers.ELU
+    act_arg1 = 1.0
+    act_arg2 = 1.0
+
 print("\nPrepping CIFAR-10 Dataset")
 train_ds, val_ds = h.load_cifar10(BATCH_SIZE)
 

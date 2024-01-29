@@ -8,14 +8,14 @@ from keras import layers, models
 
 logger = h.create_logger("shufflenetv2_dump.log")
 
-TYPE = "pwlu"
+TYPE = "shiftlu"
 STATISTICS = True #PWLU Only
-assert TYPE in ["control", "al", "pwlu", "nupwlu"]
-BOTTLENECK_RATIO = 2
+assert TYPE in ["control", "pwlu", "al", "nupwlu", "shiftlu", "shiftleaky", "leaky", "prelu", "elu"]
+BOTTLENECK_RATIO = 0.5
 SHUFFLE_BLOCKS = [3, 7, 3]
 SCALE_FACTOR = 1.0
 
-BATCH_SIZE = 128 if TYPE == "control" else (64 if TYPE == "al" else 32)
+BATCH_SIZE = 128 #if TYPE == "control" else (64 if TYPE == "al" else 32)
 CONCAT_AUG = True
 AUGMENT_FACTOR = 0.1
 
@@ -46,6 +46,22 @@ print((
 pwlu_v = II.PiecewiseLinearUnitV1 if TYPE == "pwlu" else II.NonUniform_PiecewiseLinearUnit
 activation_to_use = layers.Activation if TYPE == 'control' else (II.ActivationLinearizer if TYPE == "al" else pwlu_v)
 activation_arg = "relu" if TYPE != "pwlu" and TYPE != "nupwlu" else 5
+
+if TYPE == "shiftlu":
+    activation_to_use = II.ShiftReLU
+    activation_arg = 0
+elif TYPE == "shiftleaky":
+    activation_to_use = II.LeakyShiftReLU
+    activation_arg = 0
+elif TYPE == "leaky":
+    activation_to_use = layers.LeakyReLU
+    activation_arg = 0.3
+elif TYPE == "prelu":
+    activation_to_use = layers.PReLU
+    activation_arg = 'zeros'
+elif TYPE == "elu":
+    activation_to_use = layers.ELU
+    activation_arg = 1.0
 
 print("\nPrepping CIFAR-10 Dataset")
 train_ds, val_ds = h.load_cifar10(BATCH_SIZE)
