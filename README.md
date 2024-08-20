@@ -1,6 +1,7 @@
 # Inferred Activations (Activation Linearizer)
 
 ![Image comparing PWLU with AcLin](image.png)
+![Image showing results of Research](image2.png)
 
 An attempted exploration of what a dynamic activation function would look like. 
 
