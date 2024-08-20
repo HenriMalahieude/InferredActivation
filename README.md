@@ -14,4 +14,6 @@ AcLin is more effective than PWLU because it requires less training (PWLU needs 
 However, NUPWLU is more effective because it emulates AcLin's dynamic boundary size while not needing a "predefined derivative".
 PWLU was written in Tensorflow with inspiration from [MrGoriay's Pytorch implementation](https://github.com/MrGoriay/pwlu-pytorch/blob/main/PWLA.py).
 
+Since this research was designed for efficient training and transfering these linear functions to FPGAs, they were trained on the CIFAR-10 dataset for only 15 epochs.
+
 This research was part of an Undergraduate Grant/Fund sponsored and supervised by Dr. Philip Brisk from University of California, Riverside.
